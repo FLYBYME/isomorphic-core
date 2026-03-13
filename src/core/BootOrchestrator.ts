@@ -22,6 +22,16 @@ export class BootOrchestrator {
                 }
             }
 
+            // Phase 2.5: Health Checks (Ensuring critical dependencies are up)
+            for (const mod of modules) {
+                if (mod.health) {
+                    const isHealthy = await mod.health();
+                    if (!isHealthy) {
+                        throw new Error(`[BootOrchestrator] Module ${mod.name} failed health check.`);
+                    }
+                }
+            }
+
             // Phase 3: Ready (Starting operations)
             for (const mod of modules) {
                 if (mod.onReady) {

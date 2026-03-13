@@ -7,4 +7,5 @@ export interface IMeshModule {
     onBind?(app: IMeshApp): void | Promise<void>;
     onReady?(app: IMeshApp): void | Promise<void>;
     onStop?(app: IMeshApp): void | Promise<void>;
+    health?(): Promise<boolean>;
 }
