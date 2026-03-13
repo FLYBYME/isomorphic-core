@@ -7,6 +7,7 @@ export class BootOrchestrator {
     constructor(private app: IMeshApp) { }
 
     public async executeBootSequence(modules: IMeshModule[]): Promise<void> {
+        this.printBootGraph(modules);
         try {
             // Phase 1: Initialization (Instantiation and configuration)
             for (const mod of modules) {
@@ -42,6 +43,19 @@ export class BootOrchestrator {
             console.error(`[BootOrchestrator] Boot sequence aborted due to error:`, error);
             throw error;
         }
+    }
+
+    private printBootGraph(modules: IMeshModule[]): void {
+        console.log('\n--- 🚀 MeshApp Boot Graph ---');
+        modules.forEach((mod, i) => {
+            const prefix = i === modules.length - 1 ? '└──' : '├──';
+            console.log(`${prefix} [${mod.name}]`);
+            if (mod.onInit) console.log(`    │  (init)`);
+            if (mod.onBind) console.log(`    │  (bind)`);
+            if (mod.health) console.log(`    │  (health)`);
+            if (mod.onReady) console.log(`    │  (ready)`);
+        });
+        console.log('-----------------------------\n');
     }
 
     public async executeTeardown(modules: IMeshModule[]): Promise<void> {

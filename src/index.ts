@@ -17,3 +17,5 @@ export * from './contracts/MeshRegistry';
 export * from './contracts/ServiceInference';
 export * from './core/ContextStack';
 export * from './core/MeshError';
+export * from './modules/LoggerModule';
+export * from './modules/ConfigModule';
