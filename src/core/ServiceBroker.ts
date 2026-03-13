@@ -3,7 +3,7 @@ import { IMeshApp } from '../interfaces/IMeshApp';
 import { MeshNetwork } from 'isomorphic-mesh';
 import { ServiceRegistry } from 'isomorphic-registry';
 import { nanoid } from 'nanoid';
-import { Context } from 'isomorphic-registry';
+import { Context } from '../contracts/Context';
 import { MeshActionRegistry, MeshEventRegistry } from '../contracts/MeshRegistry';
 import { z } from 'zod';
 import { MeshTokenManager } from 'isomorphic-auth';
@@ -21,6 +21,7 @@ export const MeshActionSchemaRegistry: Map<string, { params: z.ZodTypeAny, retur
  */
 export class ServiceBroker implements IServiceBroker {
     private localServices = new Map<string, (ctx: Context<any>) => Promise<any>>();
+    private middleware: ((ctx: Context<any>, next: () => Promise<any>) => Promise<any>)[] = [];
     private logger: ILogger;
 
     constructor(
@@ -29,6 +30,10 @@ export class ServiceBroker implements IServiceBroker {
         private registry: ServiceRegistry
     ) { 
         this.logger = app.getProvider<ILogger>('logger') || app.logger;
+    }
+
+    public use(mw: (ctx: Context<any>, next: () => Promise<any>) => Promise<any>): void {
+        this.middleware.push(mw);
     }
 
     /**
@@ -44,7 +49,8 @@ export class ServiceBroker implements IServiceBroker {
     public registerService(service: any): void {
         const serviceName = service.name || service.constructor.name.replace('Service', '').toLowerCase();
         
-        const methods = Object.getOwnPropertyNames(Object.getPrototypeOf(service));
+        const prototype = Object.getPrototypeOf(service);
+        const methods = Object.getOwnPropertyNames(prototype);
         for (const method of methods) {
             if (method === 'constructor' || method.startsWith('_')) continue;
             
@@ -75,8 +81,24 @@ export class ServiceBroker implements IServiceBroker {
             }
         }
 
-        // 2. Find the node that handles this action
-        const targetNode = this.registry.selectNode(actionName, { action: actionName, params });
+        // 2. Optimization: Check local first if feasible, or use registry
+        // Lazy Loading: Retry if not found immediately (helpful during boot)
+        let targetNode = this.registry.selectNode(actionName, { action: actionName, params });
+        
+        if (!targetNode && this.localServices.has(actionName)) {
+            // It's local but maybe not yet in registry
+            return await this.executeLocal(actionName, params, {});
+        }
+
+        if (!targetNode) {
+            // Lazy Load wait: 2s max
+            for (let i = 0; i < 4; i++) {
+                await new Promise(r => setTimeout(r, 500));
+                targetNode = this.registry.selectNode(actionName, { action: actionName, params });
+                if (targetNode) break;
+            }
+        }
+
         if (!targetNode) {
             throw new Error(`[ServiceBroker] No node found for action: ${actionName}`);
         }
@@ -111,19 +133,12 @@ export class ServiceBroker implements IServiceBroker {
     }
 
     public off(event: string, handler: (payload: any) => void): void {
-        // Note: MeshNetwork dispatcher doesn't currently expose 'off' easily 
-        // through onMessage, but NetworkDispatcher inherits from EventEmitter
         (this.network.dispatcher as any).off(event, handler);
     }
 
-    /**
-     * Interceptor for incoming mesh packets.
-     * Validates tokens and maps claims before dispatching to dispatcher.
-     */
     public async handleIncomingRPC(packet: any): Promise<any> {
         const { topic, data, meta = {} } = packet;
         
-        // 1. Auth Middleware: Validate Service Ticket (ST) if present
         let userMeta: Record<string, any> = {};
         if (meta.token) {
             try {
@@ -134,19 +149,22 @@ export class ServiceBroker implements IServiceBroker {
                         id: decoded.sub,
                         groups: decoded.capabilities || [],
                         type: decoded.type,
-                        tenant_id: decoded.tenant_id // Preserve tenant_id from token
+                        tenant_id: decoded.tenant_id
                     };
                 }
-            } catch (err) {
-                this.logger.warn('Token validation failed', { error: err });
-            }
+            } catch (err) { }
         }
 
-        // 2. Local Execution
-        return await this.executeLocal(topic, data, userMeta, meta.callerID);
+        return await this.executeLocal(topic, data, userMeta, meta.callerID, meta.correlationId);
     }
 
-    private async executeLocal(actionName: string, params: any, user: Record<string, any>, callerID: string | null = null): Promise<any> {
+    private async executeLocal(
+        actionName: string, 
+        params: any, 
+        user: Record<string, any>, 
+        callerID: string | null = null,
+        correlationId: string | null = null
+    ): Promise<any> {
         const handler = this.localServices.get(actionName);
         if (!handler) {
             throw new Error(`[ServiceBroker] Local handler not found for action: ${actionName}`);
@@ -155,11 +173,12 @@ export class ServiceBroker implements IServiceBroker {
         const parentCtx = this.getContext();
         const ctx: Context<any> = {
             id: nanoid(),
+            correlationId: correlationId || parentCtx?.correlationId || nanoid(),
             actionName,
             params,
             meta: { 
                 ...parentCtx?.meta,
-                user: { ...parentCtx?.meta?.user, ...user }
+                user: { ...(parentCtx?.meta as any)?.user, ...user }
             },
             callerID: callerID || parentCtx?.id || null,
             nodeID: this.app.nodeID,
@@ -167,12 +186,33 @@ export class ServiceBroker implements IServiceBroker {
             emit: (e: string, p: unknown) => this.emit(e as any, p as any)
         };
 
-        return await ContextStack.run(ctx, () => handler(ctx));
+        // Wrap execution in middleware pipeline
+        const executeWithMiddleware = async (index: number): Promise<any> => {
+            if (index < this.middleware.length) {
+                return await this.middleware[index](ctx, () => executeWithMiddleware(index + 1));
+            }
+            return await handler(ctx);
+        };
+
+        return await ContextStack.run(ctx, async () => {
+            const result = await executeWithMiddleware(0);
+            
+            // Global Event Invalidation
+            const stateChangingKeywords = ['create', 'update', 'delete', 'save', 'insert'];
+            const [service, method] = actionName.split('.');
+            if (stateChangingKeywords.some(k => method.toLowerCase().includes(k))) {
+                this.emit(`$${service}.mutated` as any, { action: actionName, correlationId: ctx.correlationId } as any);
+            }
+            
+            return result;
+        });
     }
 
     private async executeRemote(nodeID: string, actionName: string, params: any, meta: Record<string, any>): Promise<any> {
-        this.logger.debug(`Calling remote action: ${actionName} on node: ${nodeID}`);
-        
+        const parentCtx = this.getContext();
+        meta.correlationId = parentCtx?.correlationId || nanoid();
+        meta.callerID = parentCtx?.id || null;
+
         try {
             const ticketManager = this.app.getProvider<any>('auth:ticket');
             const st = await ticketManager.getTicketFor(nodeID);

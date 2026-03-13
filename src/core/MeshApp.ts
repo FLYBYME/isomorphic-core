@@ -14,6 +14,7 @@ export class MeshApp implements IMeshApp {
     public readonly logger: ILogger;
 
     protected modules: IMeshModule[] = [];
+    protected pendingMiddleware: ((ctx: any, next: () => Promise<any>) => Promise<any>)[] = [];
     protected providers = new Map<string, unknown>();
     protected pendingServices: unknown[] = [];
     private orchestrator: BootOrchestrator;
@@ -34,8 +35,17 @@ export class MeshApp implements IMeshApp {
         };
     }
 
-    public use<TModule extends IMeshModule>(module: TModule): this {
-        this.modules.push(module);
+    public use(moduleOrMiddleware: IMeshModule | ((ctx: any, next: () => Promise<any>) => Promise<any>)): this {
+        if (typeof moduleOrMiddleware === 'function') {
+            try {
+                const broker = this.getProvider<IServiceBroker>('broker');
+                broker.use(moduleOrMiddleware);
+            } catch (err) {
+                this.pendingMiddleware.push(moduleOrMiddleware);
+            }
+        } else {
+            this.modules.push(moduleOrMiddleware);
+        }
         return this;
     }
 
@@ -58,6 +68,9 @@ export class MeshApp implements IMeshApp {
 
         if (key === 'broker') {
             const broker = provider as IServiceBroker;
+            while (this.pendingMiddleware.length > 0) {
+                broker.use(this.pendingMiddleware.shift()!);
+            }
             while (this.pendingServices.length > 0) {
                 broker.registerService(this.pendingServices.shift());
             }
