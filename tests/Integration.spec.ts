@@ -69,7 +69,10 @@ describe('isomorphic-core Integration', () => {
 
         const result = await broker.call('users.login', { username: 'bob' });
 
-        expect(sendSpy).toHaveBeenCalledWith('remote-node', 'users.login', { username: 'bob' });
+        expect(sendSpy).toHaveBeenCalledWith('remote-node', 'users.login', expect.objectContaining({
+            username: 'bob',
+            meta: expect.any(Object)
+        }));
         expect(result).toEqual({ success: true });
     });
 });

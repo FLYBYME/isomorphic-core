@@ -33,6 +33,9 @@ export class MeshApp implements IMeshApp {
             error: (msg: string, data?: any) => console.error(`[${this.nodeID}] ${msg}`, data || ''),
             child: () => this.logger
         };
+
+        this.registerProvider('logger', this.logger);
+        this.registerProvider('app' as any, this);
     }
 
     public use(moduleOrMiddleware: IMeshModule | ((ctx: any, next: () => Promise<any>) => Promise<any>)): this {

@@ -20,7 +20,6 @@ describe('MeshApp DI Container', () => {
 
     it('should register and retrieve a provider by constructor/class token', () => {
         class MyService {
-            static readonly name = 'MyService';
         }
         const serviceInstance = new MyService();
         
