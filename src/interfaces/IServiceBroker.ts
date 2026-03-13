@@ -19,4 +19,7 @@ export interface IServiceBroker extends IMeshTransceiver {
      * Retrieves the active execution context for the current operation.
      */
     getContext(): Context<any> | undefined;
+
+    on(event: string, handler: (payload: any) => void): (() => void);
+    off(event: string, handler: (payload: any) => void): void;
 }

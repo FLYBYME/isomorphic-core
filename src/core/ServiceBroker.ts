@@ -8,14 +8,7 @@ import { MeshActionRegistry, MeshEventRegistry } from '../contracts/MeshRegistry
 import { z } from 'zod';
 import { MeshTokenManager } from 'isomorphic-auth';
 import { ILogger } from '../types/core.types';
-
-// Use require to avoid issues with browser/isomorphic environments
-let ALS: any;
-try {
-    ALS = require('node:async_hooks').AsyncLocalStorage;
-} catch (e) {
-    // If we're in the browser, ALS will be unavailable
-}
+import { ContextStack } from './ContextStack';
 
 /**
  * Runtime Action Registry for Zod validation.
@@ -29,7 +22,6 @@ export const MeshActionSchemaRegistry: Map<string, { params: z.ZodTypeAny, retur
 export class ServiceBroker implements IServiceBroker {
     private localServices = new Map<string, (ctx: Context<any>) => Promise<any>>();
     private logger: ILogger;
-    private storage = ALS ? new ALS() : null;
 
     constructor(
         private app: IMeshApp,
@@ -43,7 +35,7 @@ export class ServiceBroker implements IServiceBroker {
      * Retrieves the active execution context for the current operation.
      */
     public getContext(): Context<any> | undefined {
-        return this.storage?.getStore();
+        return ContextStack.getContext();
     }
 
     /**
@@ -113,6 +105,17 @@ export class ServiceBroker implements IServiceBroker {
         this.network.publish(eventName, payload as Record<string, unknown>);
     }
 
+    public on(event: string, handler: (payload: any) => void): (() => void) {
+        this.network.onMessage(event, handler);
+        return () => this.off(event, handler);
+    }
+
+    public off(event: string, handler: (payload: any) => void): void {
+        // Note: MeshNetwork dispatcher doesn't currently expose 'off' easily 
+        // through onMessage, but NetworkDispatcher inherits from EventEmitter
+        (this.network.dispatcher as any).off(event, handler);
+    }
+
     /**
      * Interceptor for incoming mesh packets.
      * Validates tokens and maps claims before dispatching to dispatcher.
@@ -130,7 +133,8 @@ export class ServiceBroker implements IServiceBroker {
                     userMeta = {
                         id: decoded.sub,
                         groups: decoded.capabilities || [],
-                        type: decoded.type
+                        type: decoded.type,
+                        tenant_id: decoded.tenant_id // Preserve tenant_id from token
                     };
                 }
             } catch (err) {
@@ -148,22 +152,22 @@ export class ServiceBroker implements IServiceBroker {
             throw new Error(`[ServiceBroker] Local handler not found for action: ${actionName}`);
         }
 
+        const parentCtx = this.getContext();
         const ctx: Context<any> = {
             id: nanoid(),
             actionName,
             params,
-            meta: { user },
-            callerID,
+            meta: { 
+                ...parentCtx?.meta,
+                user: { ...parentCtx?.meta?.user, ...user }
+            },
+            callerID: callerID || parentCtx?.id || null,
             nodeID: this.app.nodeID,
             call: (a: string, p: unknown) => this.call(a as any, p as any),
             emit: (e: string, p: unknown) => this.emit(e as any, p as any)
         };
 
-        if (this.storage) {
-            return await this.storage.run(ctx, () => handler(ctx));
-        }
-
-        return await handler(ctx);
+        return await ContextStack.run(ctx, () => handler(ctx));
     }
 
     private async executeRemote(nodeID: string, actionName: string, params: any, meta: Record<string, any>): Promise<any> {
