@@ -22,4 +22,5 @@ export interface IServiceBroker extends IMeshTransceiver {
 
     on(event: string, handler: (payload: any) => void): (() => void);
     off(event: string, handler: (payload: any) => void): void;
+    use(middleware: (ctx: Context<any>, next: () => Promise<any>) => Promise<any>): void;
 }
