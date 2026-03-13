@@ -1,4 +1,5 @@
 import { IMeshTransceiver, MeshActionRegistry, MeshEventRegistry } from '../contracts/MeshRegistry';
+import { Context } from 'isomorphic-registry';
 
 export interface IServiceBroker extends IMeshTransceiver {
     call<
@@ -13,4 +14,9 @@ export interface IServiceBroker extends IMeshTransceiver {
     >(event: TEvent, payload: TPayload): void;
     
     registerService(service: unknown): void;
+
+    /**
+     * Retrieves the active execution context for the current operation.
+     */
+    getContext(): Context<any> | undefined;
 }

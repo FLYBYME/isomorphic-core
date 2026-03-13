@@ -9,6 +9,14 @@ import { z } from 'zod';
 import { MeshTokenManager } from 'isomorphic-auth';
 import { ILogger } from '../types/core.types';
 
+// Use require to avoid issues with browser/isomorphic environments
+let ALS: any;
+try {
+    ALS = require('node:async_hooks').AsyncLocalStorage;
+} catch (e) {
+    // If we're in the browser, ALS will be unavailable
+}
+
 /**
  * Runtime Action Registry for Zod validation.
  */
@@ -21,6 +29,7 @@ export const MeshActionSchemaRegistry: Map<string, { params: z.ZodTypeAny, retur
 export class ServiceBroker implements IServiceBroker {
     private localServices = new Map<string, (ctx: Context<any>) => Promise<any>>();
     private logger: ILogger;
+    private storage = ALS ? new ALS() : null;
 
     constructor(
         private app: IMeshApp,
@@ -28,6 +37,13 @@ export class ServiceBroker implements IServiceBroker {
         private registry: ServiceRegistry
     ) { 
         this.logger = app.getProvider<ILogger>('logger') || app.logger;
+    }
+
+    /**
+     * Retrieves the active execution context for the current operation.
+     */
+    public getContext(): Context<any> | undefined {
+        return this.storage?.getStore();
     }
 
     /**
@@ -142,6 +158,10 @@ export class ServiceBroker implements IServiceBroker {
             call: (a: string, p: unknown) => this.call(a as any, p as any),
             emit: (e: string, p: unknown) => this.emit(e as any, p as any)
         };
+
+        if (this.storage) {
+            return await this.storage.run(ctx, () => handler(ctx));
+        }
 
         return await handler(ctx);
     }
