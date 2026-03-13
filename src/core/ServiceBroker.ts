@@ -7,6 +7,7 @@ import { Context } from '../contracts/Context';
 import { MeshActionRegistry, MeshEventRegistry } from '../contracts/MeshRegistry';
 import { z } from 'zod';
 import { MeshTokenManager } from 'isomorphic-auth';
+import { ILogger } from '../types/core.types';
 
 /**
  * Runtime Action Registry for Zod validation.
@@ -19,12 +20,15 @@ export const MeshActionSchemaRegistry: Map<string, { params: z.ZodTypeAny, retur
  */
 export class ServiceBroker implements IServiceBroker {
     private localServices = new Map<string, (ctx: Context<any>) => Promise<any>>();
+    private logger: ILogger;
 
     constructor(
         private app: IMeshApp,
         private network: MeshNetwork,
         private registry: ServiceRegistry
-    ) { }
+    ) { 
+        this.logger = app.getProvider<ILogger>('logger') || app.logger;
+    }
 
     /**
      * Registers a service instance and maps its methods to actions.
@@ -39,7 +43,7 @@ export class ServiceBroker implements IServiceBroker {
             const handler = service[method];
             if (typeof handler === 'function') {
                 const actionName = `${serviceName}.${method}`;
-                // console.log(`[ServiceBroker] Registering local action: ${actionName}`);
+                this.logger.debug(`Registering local action: ${actionName}`);
                 this.localServices.set(actionName, handler.bind(service));
             }
         }
@@ -58,6 +62,7 @@ export class ServiceBroker implements IServiceBroker {
             try {
                 params = schema.params.parse(params);
             } catch (err: any) {
+                this.logger.error(`Validation failed for action: ${actionName}`, { errors: err.errors });
                 throw new Error(`[ServiceBroker] Validation failed for action: ${actionName}: ${JSON.stringify(err.errors)}`);
             }
         }
@@ -106,7 +111,6 @@ export class ServiceBroker implements IServiceBroker {
                 const tokenManager = this.app.getProvider<MeshTokenManager>('auth:token');
                 const decoded = await tokenManager.verify(meta.token);
                 if (decoded) {
-                    // Map validated claims to context meta
                     userMeta = {
                         id: decoded.sub,
                         groups: decoded.capabilities || [],
@@ -114,7 +118,7 @@ export class ServiceBroker implements IServiceBroker {
                     };
                 }
             } catch (err) {
-                this.app.getProvider<any>('logger')?.warn('Token validation failed', { error: err });
+                this.logger.warn('Token validation failed', { error: err });
             }
         }
 
@@ -128,7 +132,6 @@ export class ServiceBroker implements IServiceBroker {
             throw new Error(`[ServiceBroker] Local handler not found for action: ${actionName}`);
         }
 
-        // Create Context with mapped auth claims
         const ctx: Context<any> = {
             id: nanoid(),
             actionName,
@@ -144,14 +147,13 @@ export class ServiceBroker implements IServiceBroker {
     }
 
     private async executeRemote(nodeID: string, actionName: string, params: any, meta: Record<string, any>): Promise<any> {
-        // In a real scenario, we'd attach the ST for this nodeID to the meta
+        this.logger.debug(`Calling remote action: ${actionName} on node: ${nodeID}`);
+        
         try {
             const ticketManager = this.app.getProvider<any>('auth:ticket');
             const st = await ticketManager.getTicketFor(nodeID);
             meta.token = st;
-        } catch (err) {
-            // Not authenticated or KDC unavailable
-        }
+        } catch (err) { }
 
         return this.network.send(nodeID, actionName, { ...params, meta });
     }

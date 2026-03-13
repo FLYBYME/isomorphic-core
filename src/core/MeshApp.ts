@@ -2,6 +2,7 @@ import { IMeshApp, IMeshModule, AppConfig, ProviderToken } from '../interfaces/i
 import { BootOrchestrator } from './BootOrchestrator';
 import { IServiceBroker } from '../interfaces/IServiceBroker';
 import { MeshActionRegistry, MeshEventRegistry } from '../contracts/MeshRegistry';
+import { ILogger } from '../types/core.types';
 
 /**
  * MeshApp — The "Motherboard" shell that provides DI and lifecycle management.
@@ -10,10 +11,11 @@ export class MeshApp implements IMeshApp {
     public readonly nodeID: string;
     public readonly namespace: string;
     public readonly config: AppConfig;
+    public readonly logger: ILogger;
 
     protected modules: IMeshModule[] = [];
-    protected providers: Map<string, any> = new Map();
-    protected pendingServices: any[] = [];
+    protected providers = new Map<string, unknown>();
+    protected pendingServices: unknown[] = [];
     private orchestrator: BootOrchestrator;
 
     constructor(config: AppConfig) {
@@ -21,6 +23,15 @@ export class MeshApp implements IMeshApp {
         this.namespace = config.namespace || 'default';
         this.config = config;
         this.orchestrator = new BootOrchestrator(this);
+        
+        // Default logger if none provided in config
+        this.logger = config['logger'] || {
+            debug: (msg: string, data?: any) => console.debug(`[${this.nodeID}] ${msg}`, data || ''),
+            info: (msg: string, data?: any) => console.info(`[${this.nodeID}] ${msg}`, data || ''),
+            warn: (msg: string, data?: any) => console.warn(`[${this.nodeID}] ${msg}`, data || ''),
+            error: (msg: string, data?: any) => console.error(`[${this.nodeID}] ${msg}`, data || ''),
+            child: () => this.logger
+        };
     }
 
     public use<TModule extends IMeshModule>(module: TModule): this {
@@ -30,10 +41,8 @@ export class MeshApp implements IMeshApp {
 
     /**
      * Registers a service instance.
-     * If the broker is already registered, it registers directly.
-     * Otherwise, it queues it for when the broker is available.
      */
-    public registerService(service: any): this {
+    public registerService(service: unknown): this {
         try {
             const broker = this.getProvider<IServiceBroker>('broker');
             broker.registerService(service);
@@ -47,7 +56,6 @@ export class MeshApp implements IMeshApp {
         const key = typeof token === 'string' ? token : token.name;
         this.providers.set(key, provider);
 
-        // If we just registered the broker, flush pending services
         if (key === 'broker') {
             const broker = provider as IServiceBroker;
             while (this.pendingServices.length > 0) {
@@ -59,10 +67,10 @@ export class MeshApp implements IMeshApp {
     public getProvider<T>(token: ProviderToken<T>): T {
         const key = typeof token === 'string' ? token : token.name;
         const provider = this.providers.get(key);
-        if (!provider) {
+        if (provider === undefined) {
             throw new Error(`[MeshApp] Provider not found for token: ${key}`);
         }
-        return provider;
+        return provider as T;
     }
 
     /**
@@ -89,10 +97,14 @@ export class MeshApp implements IMeshApp {
     }
 
     public async start(): Promise<void> {
+        this.logger.info('MeshApp starting...');
         await this.orchestrator.executeBootSequence(this.modules);
+        this.logger.info('MeshApp started successfully.');
     }
 
     public async stop(): Promise<void> {
+        this.logger.info('MeshApp stopping...');
         await this.orchestrator.executeTeardown(this.modules);
+        this.logger.info('MeshApp stopped.');
     }
 }
