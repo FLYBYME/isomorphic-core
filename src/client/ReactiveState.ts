@@ -1,3 +1,4 @@
+import { type BrokerComponent } from 'isomorphic-ui';
 export type StateListener = () => void;
 
 /**
@@ -42,9 +43,17 @@ export class ReactiveState<T extends object> {
 
                 const fullPath = path ? `${path}.${key}` : key;
                 
-                // Access Tracking
+                // 1. Access Tracking (Legacy Stack-based)
                 if (ReactiveState.accessStack.length > 0) {
                     ReactiveState.accessStack[ReactiveState.accessStack.length - 1].add(fullPath);
+                }
+
+                // 2. THE MAGIC SAUCE: BrokerComponent Auto-Subscription
+                const { BrokerComponent } = require('isomorphic-ui');
+                if (BrokerComponent && BrokerComponent.currentSubscriber) {
+                    const subscriber = BrokerComponent.currentSubscriber;
+                    const unsub = self.subscribe(fullPath, () => subscriber.update());
+                    subscriber.addSubscription(unsub);
                 }
 
                 const value = Reflect.get(target, prop, receiver);
