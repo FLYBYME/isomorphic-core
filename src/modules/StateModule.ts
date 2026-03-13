@@ -7,6 +7,7 @@ import { ReactiveState } from '../client/ReactiveState';
 export class StateModule implements IMeshModule {
     public readonly name = 'state';
     private state!: ReactiveState<object>;
+    private unsubGlobal: (() => void) | null = null;
 
     constructor(private initialState: object = {}) {}
 
@@ -27,7 +28,8 @@ export class StateModule implements IMeshModule {
 
     onBind(app: IMeshApp): void {
         // Emit mutation events locally via the broker if available
-        this.state.subscribeGlobal(() => {
+        // FIX: Memory Leak - Store unsubscription function
+        this.unsubGlobal = this.state.subscribeGlobal(() => {
             try {
                 const broker = app.getProvider<any>('broker');
                 broker.emit('$state.mutated', this.state.data);
@@ -35,5 +37,12 @@ export class StateModule implements IMeshModule {
                 // Broker might not be registered yet or at all
             }
         });
+    }
+
+    onStop(): void {
+        if (this.unsubGlobal) {
+            this.unsubGlobal();
+            this.unsubGlobal = null;
+        }
     }
 }

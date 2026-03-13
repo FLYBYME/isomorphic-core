@@ -62,6 +62,12 @@ export class ReactiveState<T extends object> {
 
                 const result = Reflect.set(target, prop, value, receiver);
                 
+                // FIX: Array Trap - push/splice trigger 'set' for index AND 'length'.
+                // We suppress notification for 'length' to avoid redundant updates.
+                if (Array.isArray(target) && key === 'length') {
+                    return result;
+                }
+
                 // Path-aware notification
                 self.notify(fullPath);
                 return result;
@@ -95,8 +101,6 @@ export class ReactiveState<T extends object> {
     }
 
     private notify(path: string): void {
-        // console.log(`[ReactiveState] Path mutated: ${path}`);
-        
         // 1. Notify exact path match
         this.invokeListeners(path);
 

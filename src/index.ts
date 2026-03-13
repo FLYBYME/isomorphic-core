@@ -13,6 +13,5 @@ export * from './modules/DOMModule';
 export * from './modules/RouterModule';
 export * from './client/ReactiveState';
 export * from './client/BrokerComponent';
-export * from './contracts/Context';
 export * from './contracts/MeshRegistry';
 export * from './contracts/ServiceInference';

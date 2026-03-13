@@ -3,7 +3,7 @@ import { IMeshApp } from '../interfaces/IMeshApp';
 import { MeshNetwork } from 'isomorphic-mesh';
 import { ServiceRegistry } from 'isomorphic-registry';
 import { nanoid } from 'nanoid';
-import { Context } from '../contracts/Context';
+import { Context } from 'isomorphic-registry';
 import { MeshActionRegistry, MeshEventRegistry } from '../contracts/MeshRegistry';
 import { z } from 'zod';
 import { MeshTokenManager } from 'isomorphic-auth';

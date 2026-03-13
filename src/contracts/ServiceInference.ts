@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Context } from './Context';
+import { Context } from 'isomorphic-registry';
 
 export type InferZod<T> = T extends z.ZodType<infer P> ? P : unknown;
 

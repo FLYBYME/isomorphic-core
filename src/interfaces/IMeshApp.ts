@@ -1,5 +1,6 @@
 import { IMeshModule } from './IMeshModule';
 import { MeshActionRegistry, MeshEventRegistry } from '../contracts/MeshRegistry';
+import { ILogger } from '../types/core.types';
 
 export type ProviderToken<T = any> = string | { name: string; prototype: T };
 
@@ -13,6 +14,7 @@ export interface IMeshApp {
     readonly nodeID: string;
     readonly namespace: string;
     readonly config: AppConfig;
+    readonly logger: ILogger;
 
     use<TModule extends IMeshModule>(module: TModule): this;
     registerService(service: unknown): this;
