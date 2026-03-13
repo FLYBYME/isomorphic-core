@@ -109,6 +109,13 @@ export class ReactiveState<T extends object> {
         return () => this.globalListeners.delete(listener);
     }
 
+    /**
+     * Publicly mark a path as dirty to trigger re-renders.
+     */
+    public dirty(path: string): void {
+        this.notify(path);
+    }
+
     private notify(path: string): void {
         // 1. Notify exact path match
         this.invokeListeners(path);

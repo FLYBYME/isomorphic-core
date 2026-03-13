@@ -15,3 +15,5 @@ export * from './client/ReactiveState';
 export * from './client/BrokerComponent';
 export * from './contracts/MeshRegistry';
 export * from './contracts/ServiceInference';
+export * from './core/ContextStack';
+export * from './core/MeshError';

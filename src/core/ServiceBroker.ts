@@ -23,6 +23,7 @@ export class ServiceBroker implements IServiceBroker {
     private localServices = new Map<string, (ctx: Context<any>) => Promise<any>>();
     private middleware: ((ctx: Context<any>, next: () => Promise<any>) => Promise<any>)[] = [];
     private logger: ILogger;
+    public pendingCalls = 0;
 
     constructor(
         private app: IMeshApp,
@@ -108,7 +109,12 @@ export class ServiceBroker implements IServiceBroker {
         if (targetNode.nodeID === this.app.nodeID) {
             result = await this.executeLocal(actionName, params, {});
         } else {
-            result = await this.executeRemote(targetNode.nodeID, actionName, params, {});
+            this.pendingCalls++;
+            try {
+                result = await this.executeRemote(targetNode.nodeID, actionName, params, {});
+            } finally {
+                this.pendingCalls--;
+            }
         }
 
         // 4. Zod Validation (Post-execution)
