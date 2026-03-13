@@ -1,4 +1,5 @@
 export * from './core/MeshApp';
+export * from './core/factories';
 export * from './core/MeshClientApp';
 export * from './core/BootOrchestrator';
 export * from './core/ServiceBroker';
