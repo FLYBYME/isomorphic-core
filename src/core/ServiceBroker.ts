@@ -4,9 +4,17 @@ import { MeshNetwork, MeshPacket } from 'isomorphic-mesh';
 import { ServiceRegistry, Context, MeshActionRegistry, MeshEventRegistry, IMeshTransceiver } from 'isomorphic-registry';
 import { nanoid } from 'nanoid';
 import { z } from 'zod';
-import { MeshTokenManager } from 'isomorphic-auth';
+import { MeshTokenManager, Gatekeeper } from 'isomorphic-auth';
 import { ILogger } from '../types/core.types';
 import { ContextStack } from './ContextStack';
+
+/**
+ * Metadata for local actions.
+ */
+interface LocalAction {
+    handler: (ctx: Context<unknown>) => Promise<unknown>;
+    highSecurity?: boolean;
+}
 
 /**
  * Runtime Action Registry for Zod validation.
@@ -18,7 +26,7 @@ export const MeshActionSchemaRegistry: Map<string, { params: z.ZodTypeAny, retur
  * Includes middleware for security and validation.
  */
 export class ServiceBroker implements IServiceBroker {
-    private localServices = new Map<string, (ctx: Context<unknown>) => Promise<unknown>>();
+    private localServices = new Map<string, LocalAction>();
     private middleware: ((ctx: Context<unknown>, next: () => Promise<unknown>) => Promise<unknown>)[] = [];
     private logger: ILogger;
     public pendingCalls = 0;
@@ -45,11 +53,15 @@ export class ServiceBroker implements IServiceBroker {
     /**
      * Registers a service instance and maps its methods to actions.
      */
-    public registerService(service: Record<string, unknown>): void {
+    public registerService(service: any): void {
         const serviceName = service.name || service.constructor.name.replace('Service', '').toLowerCase();
         
         const prototype = Object.getPrototypeOf(service);
         const methods = Object.getOwnPropertyNames(prototype);
+
+        // Check for actions in schema if available (standard Triad pattern)
+        const schemaActions = service.schema?.actions || service.actions || {};
+
         for (const method of methods) {
             if (method === 'constructor' || method.startsWith('_')) continue;
             
@@ -57,7 +69,12 @@ export class ServiceBroker implements IServiceBroker {
             if (typeof handler === 'function') {
                 const actionName = `${serviceName}.${method}`;
                 this.logger.debug(`Registering local action: ${actionName}`);
-                this.localServices.set(actionName, (handler as Function).bind(service));
+                
+                const metadata = schemaActions[method] || {};
+                this.localServices.set(actionName, {
+                    handler: (handler as Function).bind(service),
+                    highSecurity: metadata.highSecurity === true
+                });
             }
         }
     }
@@ -146,8 +163,9 @@ export class ServiceBroker implements IServiceBroker {
         let userMeta: Record<string, unknown> = {};
         if (meta.token) {
             try {
-                const tokenManager = this.app.getProvider<MeshTokenManager>('auth:token');
-                const decoded = await tokenManager.verify(meta.token as string);
+                const gatekeeper = this.app.getProvider<Gatekeeper>('auth:gatekeeper');
+                const decoded = await gatekeeper.verifyServiceTicket(meta.token as string);
+                
                 if (decoded) {
                     userMeta = {
                         id: decoded.sub,
@@ -155,8 +173,27 @@ export class ServiceBroker implements IServiceBroker {
                         type: decoded.type,
                         tenant_id: decoded.tenant_id
                     };
+
+                    // High Security PAC Check
+                    const localAction = this.localServices.get(topic);
+                    if (localAction?.highSecurity) {
+                        this.logger.info(`[Gatekeeper] High-security action detected: ${topic}. Performing real-time PAC check-back...`);
+                        const isValid = await gatekeeper.checkPAC(decoded.sub, (a: string, p: unknown) => this.call(a as any, p as any));
+                        if (!isValid) {
+                            throw new Error(`[Gatekeeper] Real-time PAC check failed for ${decoded.sub}. Access denied.`);
+                        }
+                    }
+                } else {
+                    throw new Error('[Gatekeeper] Invalid or expired service ticket.');
                 }
-            } catch (err) { }
+            } catch (err: any) {
+                this.logger.error(`[ServiceBroker] Security blockage: ${err.message}`);
+                throw err;
+            }
+        } else {
+            // No token provided - block if it's not a public action?
+            // For now, we'll assume it's okay unless it's a protected service, 
+            // but in a production Zero-Trust model, we would block here.
         }
 
         return await this.executeLocal(topic as string, data, userMeta, meta.callerID as string | null, meta.correlationId as string | null);
@@ -169,8 +206,8 @@ export class ServiceBroker implements IServiceBroker {
         callerID: string | null = null,
         correlationId: string | null = null
     ): Promise<unknown> {
-        const handler = this.localServices.get(actionName);
-        if (!handler) {
+        const action = this.localServices.get(actionName);
+        if (!action) {
             throw new Error(`[ServiceBroker] Local handler not found for action: ${actionName}`);
         }
 
@@ -195,7 +232,7 @@ export class ServiceBroker implements IServiceBroker {
             if (index < this.middleware.length) {
                 return await this.middleware[index](ctx, () => executeWithMiddleware(index + 1));
             }
-            return await handler(ctx);
+            return await action.handler(ctx);
         };
 
         return await ContextStack.run(ctx, async () => {
@@ -218,7 +255,7 @@ export class ServiceBroker implements IServiceBroker {
         meta.callerID = (parentCtx?.id || null) as any;
 
         try {
-            const ticketManager = this.app.getProvider<Record<string, any>>('auth:ticket');
+            const ticketManager = this.app.getProvider<any>('auth:ticket');
             const st = await ticketManager.getTicketFor(nodeID);
             meta.token = st;
         } catch (err) { }

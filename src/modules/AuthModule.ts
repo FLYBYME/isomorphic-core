@@ -1,5 +1,5 @@
 import { IMeshModule, IMeshApp } from '../interfaces/index';
-import { MeshTokenManager, PolicyEngine, TicketManager } from 'isomorphic-auth';
+import { MeshTokenManager, PolicyEngine, TicketManager, Gatekeeper } from 'isomorphic-auth';
 
 /**
  * AuthModule — Connects the authentication "Organs" to the MeshApp shell.
@@ -22,12 +22,21 @@ export class AuthModule implements IMeshModule {
             app.config['privateKey']
         );
 
-        // 3. Hierarchical Policy Engine
+        // 3. Security Gatekeeper for inbound calls
+        const gatekeeper = new Gatekeeper(
+            app.nodeID,
+            tokenManager,
+            logger,
+            app.config['kdcPublicKey']
+        );
+
+        // 4. Hierarchical Policy Engine
         const policyEngine = new PolicyEngine();
 
         // Register Providers
         app.registerProvider('auth:token', tokenManager);
         app.registerProvider('auth:ticket', ticketManager);
+        app.registerProvider('auth:gatekeeper', gatekeeper);
         app.registerProvider('auth:policy', policyEngine);
     }
 

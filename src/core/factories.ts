@@ -5,7 +5,6 @@ import { BrokerModule } from '../modules/BrokerModule';
 import { NetworkModule } from '../modules/NetworkModule';
 import { RegistryModule } from '../modules/RegistryModule';
 import { AuthModule } from '../modules/AuthModule';
-import { StateModule } from '../modules/StateModule';
 
 
 export interface MeshAppOptions extends AppConfig {
@@ -27,7 +26,6 @@ export function createMeshApp(options: MeshAppOptions) {
     app.use(new BrokerModule());
     app.use(new NetworkModule());
     app.use(new AuthModule());
-    app.use(new StateModule());
     
 
 
