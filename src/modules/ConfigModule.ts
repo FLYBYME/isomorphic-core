@@ -10,7 +10,7 @@ export class ConfigModule<TSchema extends z.ZodObject<any>> implements IMeshModu
 
     constructor(
         private schema: TSchema,
-        private source: Record<string, unknown> = (typeof process !== 'undefined' ? process.env : {}) as any
+        private source: Record<string, unknown> = (typeof process !== 'undefined' ? process.env : {}) as Record<string, unknown>
     ) {}
 
     onInit(app: IMeshApp): void {

@@ -19,7 +19,7 @@ export interface MeshClientConfig {
  */
 export function createMeshApp(config: MeshClientConfig): MeshClientApp {
     const app = new MeshClientApp({
-        nodeID: config.nodeID,
+        nodeID: config.nodeID || `client_${Math.random().toString(36).substring(2, 11)}`,
         namespace: config.namespace,
         rootID: config.rootElement
     });

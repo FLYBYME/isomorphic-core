@@ -1,6 +1,7 @@
 import { IMeshModule, IMeshApp } from '../interfaces/index';
 import { ServiceBroker } from '../core/ServiceBroker';
 import { MeshNetwork } from 'isomorphic-mesh';
+import { MeshPacket } from 'isomorphic-mesh';
 import { ServiceRegistry } from 'isomorphic-registry';
 
 /**
@@ -17,12 +18,13 @@ export class BrokerModule implements IMeshModule {
         app.registerProvider('broker', broker);
 
         // Wire the broker to handle incoming RPC requests from the network
-        network.onMessage('$rpc.request', async (data, packet) => {
+        network.onMessage('$rpc.request', async (data: any, packet: MeshPacket) => {
+            const rpcData = data as Record<string, unknown>;
             try {
                 // The packet contains topic (action), data (params), and meta (token, etc.)
                 const result = await broker.handleIncomingRPC({
-                    topic: data.action || packet.topic,
-                    data: data.params || data,
+                    topic: rpcData.action as string || packet.topic,
+                    data: rpcData.params || rpcData,
                     meta: packet.meta || {}
                 });
 
@@ -30,15 +32,16 @@ export class BrokerModule implements IMeshModule {
                 if (packet.id) {
                     await network.send(packet.senderNodeID!, '$rpc.response', {
                         id: packet.id,
-                        data: result,
+                        data: result as Record<string, unknown>,
                         type: 'RESPONSE'
                     });
                 }
-            } catch (err: any) {
+            } catch (err: unknown) {
                 if (packet.id) {
+                    const message = err instanceof Error ? err.message : String(err);
                     await network.send(packet.senderNodeID!, '$rpc.response', {
                         id: packet.id,
-                        data: { message: err.message },
+                        data: { message },
                         type: 'RESPONSE_ERROR'
                     });
                 }

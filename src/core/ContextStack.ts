@@ -1,12 +1,12 @@
-import { Context } from '../contracts/Context';
+import { Context } from 'isomorphic-registry';
 
 /**
  * Isomorphic Context Tracking.
  * Uses AsyncLocalStorage in Node.js and a simple stack in the Browser.
  */
 export class ContextStack {
-    private static storage: any;
-    private static browserStack: Context<any>[] = [];
+    private static storage: import('node:async_hooks').AsyncLocalStorage<Context<unknown>> | undefined;
+    private static browserStack: Context<unknown>[] = [];
 
     static {
         try {
@@ -23,7 +23,7 @@ export class ContextStack {
     /**
      * Executes a function within a context.
      */
-    public static run<T>(ctx: Context<any>, fn: () => T): T {
+    public static run<T>(ctx: Context<unknown>, fn: () => T): T {
         if (this.storage) {
             return this.storage.run(ctx, fn);
         }
@@ -40,7 +40,7 @@ export class ContextStack {
     /**
      * Retrieves the current context.
      */
-    public static getContext(): Context<any> | undefined {
+    public static getContext(): Context<unknown> | undefined {
         if (this.storage) {
             return this.storage.getStore();
         }

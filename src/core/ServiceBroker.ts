@@ -1,10 +1,8 @@
 import { IServiceBroker } from '../interfaces/IServiceBroker';
 import { IMeshApp } from '../interfaces/IMeshApp';
-import { MeshNetwork } from 'isomorphic-mesh';
-import { ServiceRegistry } from 'isomorphic-registry';
+import { MeshNetwork, MeshPacket } from 'isomorphic-mesh';
+import { ServiceRegistry, Context, MeshActionRegistry, MeshEventRegistry, IMeshTransceiver } from 'isomorphic-registry';
 import { nanoid } from 'nanoid';
-import { Context } from '../contracts/Context';
-import { MeshActionRegistry, MeshEventRegistry } from '../contracts/MeshRegistry';
 import { z } from 'zod';
 import { MeshTokenManager } from 'isomorphic-auth';
 import { ILogger } from '../types/core.types';
@@ -20,8 +18,8 @@ export const MeshActionSchemaRegistry: Map<string, { params: z.ZodTypeAny, retur
  * Includes middleware for security and validation.
  */
 export class ServiceBroker implements IServiceBroker {
-    private localServices = new Map<string, (ctx: Context<any>) => Promise<any>>();
-    private middleware: ((ctx: Context<any>, next: () => Promise<any>) => Promise<any>)[] = [];
+    private localServices = new Map<string, (ctx: Context<unknown>) => Promise<unknown>>();
+    private middleware: ((ctx: Context<unknown>, next: () => Promise<unknown>) => Promise<unknown>)[] = [];
     private logger: ILogger;
     public pendingCalls = 0;
 
@@ -33,21 +31,21 @@ export class ServiceBroker implements IServiceBroker {
         this.logger = app.getProvider<ILogger>('logger') || app.logger;
     }
 
-    public use(mw: (ctx: Context<any>, next: () => Promise<any>) => Promise<any>): void {
+    public use(mw: (ctx: Context<unknown>, next: () => Promise<unknown>) => Promise<unknown>): void {
         this.middleware.push(mw);
     }
 
     /**
      * Retrieves the active execution context for the current operation.
      */
-    public getContext(): Context<any> | undefined {
-        return ContextStack.getContext();
+    public getContext(): Context<unknown> | undefined {
+        return ContextStack.getContext() as Context<unknown> | undefined;
     }
 
     /**
      * Registers a service instance and maps its methods to actions.
      */
-    public registerService(service: any): void {
+    public registerService(service: Record<string, unknown>): void {
         const serviceName = service.name || service.constructor.name.replace('Service', '').toLowerCase();
         
         const prototype = Object.getPrototypeOf(service);
@@ -59,7 +57,7 @@ export class ServiceBroker implements IServiceBroker {
             if (typeof handler === 'function') {
                 const actionName = `${serviceName}.${method}`;
                 this.logger.debug(`Registering local action: ${actionName}`);
-                this.localServices.set(actionName, handler.bind(service));
+                this.localServices.set(actionName, (handler as Function).bind(service));
             }
         }
     }
@@ -88,7 +86,7 @@ export class ServiceBroker implements IServiceBroker {
         
         if (!targetNode && this.localServices.has(actionName)) {
             // It's local but maybe not yet in registry
-            return await this.executeLocal(actionName, params, {});
+            return await this.executeLocal(actionName, params, {}) as TReturn;
         }
 
         if (!targetNode) {
@@ -105,7 +103,7 @@ export class ServiceBroker implements IServiceBroker {
         }
 
         // 3. Local or Remote?
-        let result: any;
+        let result: unknown;
         if (targetNode.nodeID === this.app.nodeID) {
             result = await this.executeLocal(actionName, params, {});
         } else {
@@ -133,23 +131,23 @@ export class ServiceBroker implements IServiceBroker {
         this.network.publish(eventName, payload as Record<string, unknown>);
     }
 
-    public on(event: string, handler: (payload: any) => void): (() => void) {
+    public on(event: string, handler: (payload: unknown) => void): (() => void) {
         this.network.onMessage(event, handler);
         return () => this.off(event, handler);
     }
 
-    public off(event: string, handler: (payload: any) => void): void {
+    public off(event: string, handler: (payload: unknown) => void): void {
         (this.network.dispatcher as any).off(event, handler);
     }
 
-    public async handleIncomingRPC(packet: any): Promise<any> {
-        const { topic, data, meta = {} } = packet;
+    public async handleIncomingRPC(packet: unknown): Promise<unknown> {
+        const { topic, data, meta = {} } = packet as { topic: string, data: unknown, meta: Record<string, unknown> };
         
-        let userMeta: Record<string, any> = {};
+        let userMeta: Record<string, unknown> = {};
         if (meta.token) {
             try {
                 const tokenManager = this.app.getProvider<MeshTokenManager>('auth:token');
-                const decoded = await tokenManager.verify(meta.token);
+                const decoded = await tokenManager.verify(meta.token as string);
                 if (decoded) {
                     userMeta = {
                         id: decoded.sub,
@@ -161,31 +159,31 @@ export class ServiceBroker implements IServiceBroker {
             } catch (err) { }
         }
 
-        return await this.executeLocal(topic, data, userMeta, meta.callerID, meta.correlationId);
+        return await this.executeLocal(topic as string, data, userMeta, meta.callerID as string | null, meta.correlationId as string | null);
     }
 
     private async executeLocal(
         actionName: string, 
-        params: any, 
-        user: Record<string, any>, 
+        params: unknown, 
+        user: Record<string, unknown>, 
         callerID: string | null = null,
         correlationId: string | null = null
-    ): Promise<any> {
+    ): Promise<unknown> {
         const handler = this.localServices.get(actionName);
         if (!handler) {
             throw new Error(`[ServiceBroker] Local handler not found for action: ${actionName}`);
         }
 
         const parentCtx = this.getContext();
-        const ctx: Context<any> = {
+        const ctx: Context<unknown> = {
             id: nanoid(),
             correlationId: correlationId || parentCtx?.correlationId || nanoid(),
             actionName,
             params,
             meta: { 
                 ...parentCtx?.meta,
-                user: { ...(parentCtx?.meta as any)?.user, ...user }
-            },
+                user: { ...(parentCtx?.meta as Record<string, unknown>)?.user as Record<string, unknown>, ...user }
+            } as Record<string, unknown>,
             callerID: callerID || parentCtx?.id || null,
             nodeID: this.app.nodeID,
             call: (a: string, p: unknown) => this.call(a as any, p as any),
@@ -214,17 +212,25 @@ export class ServiceBroker implements IServiceBroker {
         });
     }
 
-    private async executeRemote(nodeID: string, actionName: string, params: any, meta: Record<string, any>): Promise<any> {
+    private async executeRemote(nodeID: string, actionName: string, params: unknown, meta: Record<string, unknown>): Promise<unknown> {
         const parentCtx = this.getContext();
-        meta.correlationId = parentCtx?.correlationId || nanoid();
-        meta.callerID = parentCtx?.id || null;
+        meta.correlationId = (parentCtx?.correlationId || nanoid());
+        meta.callerID = (parentCtx?.id || null) as any;
 
         try {
-            const ticketManager = this.app.getProvider<any>('auth:ticket');
+            const ticketManager = this.app.getProvider<Record<string, any>>('auth:ticket');
             const st = await ticketManager.getTicketFor(nodeID);
             meta.token = st;
         } catch (err) { }
 
-        return this.network.send(nodeID, actionName, { ...params, meta });
+        return this.network.send(nodeID, { 
+            topic: actionName,
+            data: params,
+            id: meta.correlationId as string,
+            type: 'REQUEST',
+            senderNodeID: this.app.nodeID,
+            timestamp: Date.now(),
+            meta 
+        } as MeshPacket);
     }
 }

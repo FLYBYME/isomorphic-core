@@ -1,4 +1,4 @@
-import { type BrokerComponent } from 'isomorphic-ui';
+
 export type StateListener = () => void;
 
 /**
@@ -49,11 +49,14 @@ export class ReactiveState<T extends object> {
                 }
 
                 // 2. THE MAGIC SAUCE: BrokerComponent Auto-Subscription
-                const { BrokerComponent } = require('isomorphic-ui');
-                if (BrokerComponent && BrokerComponent.currentSubscriber) {
-                    const subscriber = BrokerComponent.currentSubscriber;
-                    const unsub = self.subscribe(fullPath, () => subscriber.update());
-                    subscriber.addSubscription(unsub);
+                // We use a global helper to avoid direct dependency on isomorphic-ui
+                const globalAny = globalThis as any;
+                if (globalAny.MeshMagicSauce && globalAny.MeshMagicSauce.currentSubscriber) {
+                    const subscriber = globalAny.MeshMagicSauce.currentSubscriber;
+                    const unsub = self.subscribe(fullPath, () => subscriber.invalidate());
+                    if (subscriber.unsubscribes) {
+                        subscriber.unsubscribes.push(unsub);
+                    }
                 }
 
                 const value = Reflect.get(target, prop, receiver);
