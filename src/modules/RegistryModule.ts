@@ -22,4 +22,11 @@ export class RegistryModule implements IMeshModule {
 
         app.registerProvider('registry', this.registry);
     }
+
+    onStop(): void {
+        if (this.registry) {
+            this.registry.stop();
+        }
+    }
 }
+
