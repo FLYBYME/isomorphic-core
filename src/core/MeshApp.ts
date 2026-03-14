@@ -3,6 +3,7 @@ import { BootOrchestrator } from './BootOrchestrator';
 import { IServiceBroker } from '../interfaces/IServiceBroker';
 import { MeshActionRegistry, MeshEventRegistry } from '../contracts/MeshRegistry';
 import { ILogger } from '../types/core.types';
+import { IServiceInstance, ServiceSchema } from 'isomorphic-registry';
 
 /**
  * MeshApp — The "Motherboard" shell that provides DI and lifecycle management.
@@ -16,7 +17,7 @@ export class MeshApp implements IMeshApp {
     protected modules: IMeshModule[] = [];
     protected pendingMiddleware: ((ctx: any, next: () => Promise<any>) => Promise<any>)[] = [];
     protected providers = new Map<string, unknown>();
-    protected pendingServices: unknown[] = [];
+    protected pendingServices: ServiceSchema[] = [];
     private orchestrator: BootOrchestrator;
 
     constructor(config: AppConfig) {
@@ -24,7 +25,7 @@ export class MeshApp implements IMeshApp {
         this.namespace = config.namespace || 'default';
         this.config = config;
         this.orchestrator = new BootOrchestrator(this);
-        
+
         // Default logger if none provided in config
         this.logger = config['logger'] || {
             debug: (msg: string, data?: any) => console.debug(`[${this.nodeID}] ${msg}`, data || ''),
@@ -55,7 +56,7 @@ export class MeshApp implements IMeshApp {
     /**
      * Registers a service instance.
      */
-    public registerService(service: unknown): this {
+    public registerService(service: ServiceSchema): this {
         try {
             const broker = this.getProvider<IServiceBroker>('broker');
             broker.registerService(service);
@@ -75,7 +76,11 @@ export class MeshApp implements IMeshApp {
                 broker.use(this.pendingMiddleware.shift()!);
             }
             while (this.pendingServices.length > 0) {
-                broker.registerService(this.pendingServices.shift());
+                const service = this.pendingServices.shift();
+                if (service === undefined) {
+                    throw new Error('Service is undefined');
+                }
+                broker.registerService(service);
             }
         }
     }
@@ -93,7 +98,7 @@ export class MeshApp implements IMeshApp {
      * Delegate RPC requests directly to the ServiceBroker.
      */
     public async call<
-        TAction extends keyof MeshActionRegistry, 
+        TAction extends keyof MeshActionRegistry,
         TParams extends MeshActionRegistry[TAction] extends { params: infer P } ? P : any,
         TReturn extends MeshActionRegistry[TAction] extends { returns: infer R } ? R : any
     >(action: TAction, params: TParams): Promise<TReturn> {
