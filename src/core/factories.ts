@@ -6,8 +6,7 @@ import { NetworkModule } from '../modules/NetworkModule';
 import { RegistryModule } from '../modules/RegistryModule';
 import { AuthModule } from '../modules/AuthModule';
 import { StateModule } from '../modules/StateModule';
-import { DOMModule } from '../modules/DOMModule';
-import { RouterModule } from '../modules/RouterModule';
+
 
 export interface MeshAppOptions extends AppConfig {
     logLevel?: LogLevel;
@@ -30,10 +29,7 @@ export function createMeshApp(options: MeshAppOptions) {
     app.use(new AuthModule());
     app.use(new StateModule());
     
-    if (typeof document !== 'undefined') {
-        app.use(new DOMModule({ rootID: options.rootID }));
-        app.use(new RouterModule());
-    }
+
 
     // Add user modules
     if (options.modules) {

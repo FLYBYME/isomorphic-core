@@ -1,5 +1,5 @@
 import { IMeshModule, IMeshApp } from '../interfaces/index';
-import { ReactiveState } from '../client/ReactiveState';
+import { ReactiveState } from '../core/ReactiveState';
 
 /**
  * StateModule — Initializes the JavaScript Proxy-based reactive state tree.

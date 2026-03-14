@@ -11,7 +11,7 @@ export * from './modules/ConsensusModule';
 export * from './modules/BrokerModule';
 export * from './modules/StateModule';
 
-export * from './client/ReactiveState';
+export * from './core/ReactiveState';
 
 export * from './contracts/MeshRegistry';
 export * from './contracts/ServiceInference';
