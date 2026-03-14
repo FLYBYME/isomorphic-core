@@ -46,3 +46,25 @@ export class MeshError extends Error {
         };
     }
 }
+
+/**
+ * ResiliencyError — Thrown by Circuit Breakers, Rate Limiters, or Retry policies.
+ * Maps to 503 (Service Unavailable) or 429 (Too Many Requests).
+ */
+export class ResiliencyError extends MeshError {
+    constructor(message: string, code = 'SERVICE_UNAVAILABLE', status = 503) {
+        super({ message, code, status });
+        this.name = 'ResiliencyError';
+    }
+}
+
+/**
+ * ClientError — Thrown for user-level validation or permission errors (4xx).
+ */
+export class ClientError extends MeshError {
+    constructor(message: string, code = 'BAD_REQUEST', status = 400) {
+        super({ message, code, status });
+        this.name = 'ClientError';
+    }
+}
+
