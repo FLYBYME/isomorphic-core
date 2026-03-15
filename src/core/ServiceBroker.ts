@@ -162,7 +162,7 @@ export class ServiceBroker implements IServiceBroker {
         if (schema) params = schema.params.parse(params);
         
         const parentCtx = this.getContext();
-        const ctx: IContext<unknown, Record<string, unknown>> = {
+        const ctx: IContext<any, Record<string, any>> = {
             id: nanoid(),
             correlationID: parentCtx?.correlationID || nanoid(),
             actionName, 
@@ -178,12 +178,12 @@ export class ServiceBroker implements IServiceBroker {
     }
 
     public async handleIncomingRPC(packet: IMeshPacket): Promise<unknown> {
-        const ctx: IContext<unknown, Record<string, unknown>> = {
+        const ctx: IContext<any, Record<string, any>> = {
             id: packet.id,
             correlationID: (packet.meta?.correlationID as string) || packet.id,
             actionName: packet.topic, 
             params: packet.data,
-            meta: (packet.meta as Record<string, unknown>) || {},
+            meta: (packet.meta as Record<string, any>) || {},
             callerID: packet.senderNodeID,
             nodeID: this.app.nodeID,
             call: (a: string, p: unknown) => this.internalCall(a, p),
@@ -195,8 +195,8 @@ export class ServiceBroker implements IServiceBroker {
     /**
      * Bipartite Pipeline Execution Engine.
      */
-    public async handlePipeline(ctx: IContext<unknown, Record<string, unknown>>): Promise<unknown> {
-        return await ContextStack.run(ctx, async () => {
+    public async handlePipeline(ctx: IContext<any, Record<string, any>>): Promise<unknown> {
+        return await ContextStack.run(ctx as any, async () => {
             try {
                 await this.executeChain(ctx, this.globalMiddleware);
                 if (ctx.result !== undefined) return ctx.result;
@@ -214,13 +214,13 @@ export class ServiceBroker implements IServiceBroker {
                 throw new Error(`[ServiceBroker] Remote call to ${ctx.targetNodeID} unhandled by Global Pipeline.`);
 
             } catch (err) {
-                ctx.error = err;
+                (ctx as any).error = err;
                 throw err;
             }
         });
     }
 
-    private async executeChain(ctx: IContext<unknown, Record<string, unknown>>, chain: IMiddleware[]): Promise<void> {
+    private async executeChain(ctx: IContext<any, Record<string, any>>, chain: IMiddleware[]): Promise<void> {
         const executeNext = async (index: number): Promise<unknown> => {
             if (index < chain.length) return await chain[index](ctx, () => executeNext(index + 1));
             return undefined;
