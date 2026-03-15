@@ -96,7 +96,7 @@ export class ServiceBroker implements IServiceBroker {
                             pending.resolve(packet.data);
                         }
                     } catch (err) {
-                        this.logger.error(`[ServiceBroker] Unhandled exception in RPC response handler for ${correlationId}:`, err);
+                        this.logger.error(`[ServiceBroker] Unhandled exception in RPC response handler for ${correlationId}:`, err as any);
                     }
                 }
             }
@@ -137,8 +137,12 @@ export class ServiceBroker implements IServiceBroker {
         const serviceDict = service as unknown as Record<string, unknown>;
 
         for (const actionNameKey of Object.keys(schemaActions)) {
-            const handler = serviceDict[actionNameKey];
             const actionDef = schemaActions[actionNameKey];
+            let handler = serviceDict[actionNameKey];
+            if (typeof handler !== 'function' && typeof actionDef.handler === 'function') {
+                handler = actionDef.handler;
+            }
+
             if (typeof handler === 'function') {
                 const actionName = `${serviceName}.${actionNameKey}`;
                 
@@ -231,20 +235,27 @@ export class ServiceBroker implements IServiceBroker {
     public async handlePipeline(ctx: IContext<any, Record<string, any>>): Promise<unknown> {
         return await ContextStack.run(ctx as any, async () => {
             try {
-                await this.executeChain(ctx, this.globalMiddleware);
-                if (ctx.result !== undefined) return ctx.result;
+                // Determine if it's a local call or needs remote dispatch
+                const isLocal = !ctx.targetNodeID || ctx.targetNodeID === this.app.nodeID;
 
-                if (!ctx.targetNodeID || ctx.targetNodeID === this.app.nodeID) {
-                    await this.executeChain(ctx, this.localMiddleware);
-                    if (ctx.result !== undefined) return ctx.result;
-
-                    const action = this.localServices.get(ctx.actionName);
-                    if (!action) throw new Error(`[ServiceBroker] Local action not found: ${ctx.actionName}`);
-                    
-                    return await action.handler(ctx);
+                // Build the execution chain: Global Middleware -> (if Local: Local Middleware -> Action) -> Remote
+                const chain = [...this.globalMiddleware];
+                if (isLocal) {
+                    chain.push(...this.localMiddleware);
                 }
 
-                throw new Error(`[ServiceBroker] Remote call to ${ctx.targetNodeID} unhandled by Global Pipeline.`);
+                const finalHandler = async () => {
+                    if (isLocal) {
+                        const action = this.localServices.get(ctx.actionName);
+                        if (!action) throw new Error(`[ServiceBroker] Local action not found: ${ctx.actionName}`);
+                        return await action.handler(ctx);
+                    } else {
+                        // Remote call dispatch logic (handled by global middleware or this default)
+                        return await this.executeRemote(ctx.targetNodeID!, ctx.actionName, ctx.params, ctx.meta);
+                    }
+                };
+
+                return await this.executeChain(ctx, chain, finalHandler);
 
             } catch (err) {
                 (ctx as any).error = err;
@@ -253,12 +264,18 @@ export class ServiceBroker implements IServiceBroker {
         });
     }
 
-    private async executeChain(ctx: IContext<any, Record<string, any>>, chain: IMiddleware[]): Promise<void> {
+    private async executeChain(
+        ctx: IContext<any, Record<string, any>>, 
+        chain: IMiddleware[], 
+        finalHandler: () => Promise<unknown>
+    ): Promise<unknown> {
         const executeNext = async (index: number): Promise<unknown> => {
-            if (index < chain.length) return await chain[index](ctx, () => executeNext(index + 1));
-            return undefined;
+            if (index < chain.length) {
+                return await chain[index](ctx, () => executeNext(index + 1));
+            }
+            return await finalHandler();
         };
-        await executeNext(0);
+        return await executeNext(0);
     }
 
     public async executeRemote(nodeID: string, actionName: string, params: unknown, meta: Record<string, unknown> = {}): Promise<unknown> {

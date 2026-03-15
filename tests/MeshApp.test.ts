@@ -1,5 +1,5 @@
-import { MeshApp } from '../core/MeshApp';
-import { IMeshModule } from '../interfaces';
+import { MeshApp } from '../src/core/MeshApp';
+import { IMeshModule } from '../src/interfaces';
 
 describe('MeshApp DI Container', () => {
     let app: MeshApp;

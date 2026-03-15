@@ -1,1 +1,1 @@
-export type IProviderToken<T> = string & { __brand?: T };
+export type IProviderToken<T> = (string | symbol | (new (...args: any[]) => T)) & { __brand?: T };

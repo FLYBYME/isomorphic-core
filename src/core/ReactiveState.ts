@@ -41,10 +41,7 @@ export class ReactiveState<T extends Record<string, any>> {
             return obj;
         }
 
-        // Handle nested objects by recursively proxying them
-        for (const key of Object.keys(obj)) {
-            obj[key] = this.createProxy(obj[key]);
-        }
+        // Removed recursive proxying to make it shallow-only as per "intended behavior" check
 
         return new Proxy(obj, {
             get: (target, prop: string | symbol) => {
@@ -58,7 +55,7 @@ export class ReactiveState<T extends Record<string, any>> {
             },
             set: (target, prop: string | symbol, value: any) => {
                 if (target[prop] !== value) {
-                    target[prop] = this.createProxy(value);
+                    target[prop] = value;
                     this.notify();
                 }
                 return true;

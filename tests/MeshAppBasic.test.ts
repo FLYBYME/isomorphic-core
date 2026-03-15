@@ -1,4 +1,4 @@
-import { MeshApp } from '../core/MeshApp';
+import { MeshApp } from '../src/core/MeshApp';
 
 describe('MeshApp Basic', () => {
     it('should instantiate', () => {

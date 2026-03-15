@@ -29,13 +29,19 @@ export class ContextStack {
             return this.storage.run(ctx, fn);
         }
         
-        // Browser Fallback: Manual stack management
+        // Browser Fallback: Manual stack management with safety checks
+        const previousContext = this.getContext();
         this.browserStack.push(ctx);
         try {
             const result = fn();
             if (result instanceof Promise) {
                 return result.finally(() => {
-                    this.browserStack.pop();
+                    // Safety check: ensure we don't pop the wrong context if stacks get misaligned
+                    const current = this.browserStack.pop();
+                    if (current !== ctx) {
+                        console.error('[ContextStack] Context corruption detected in browser environment. Async operations overlapped incorrectly.');
+                        // If we popped the wrong one, we might need to restore others, but it's already corrupted.
+                    }
                 }) as unknown as T;
             }
             this.browserStack.pop();

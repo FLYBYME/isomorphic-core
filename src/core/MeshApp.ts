@@ -14,7 +14,7 @@ export class MeshApp implements IMeshApp {
     protected pendingMiddleware: ((ctx: IContext<unknown, Record<string, unknown>>, next: () => Promise<unknown>) => Promise<unknown>)[] = [];
     protected providers = new Map<string, unknown>();
     protected pendingServices: IServiceSchema[] = [];
-    private orchestrator: BootOrchestrator;
+    public orchestrator: BootOrchestrator;
 
     constructor(config: AppConfig) {
         this.nodeID = config.nodeID;
@@ -121,6 +121,16 @@ export class MeshApp implements IMeshApp {
     public async call(action: string, params: unknown): Promise<unknown> {
         const broker = this.getProvider<IServiceBroker>('broker');
         return broker.call(action, params);
+    }
+
+    public async publish<T = unknown>(topic: string, data: T): Promise<void> {
+        if (this.hasProvider('broker')) {
+            const broker = this.getProvider<IServiceBroker>('broker');
+            broker.emit(topic, data);
+        } else {
+            // Potentially queue or log
+            this.logger.warn(`[MeshApp] Cannot publish to ${topic}, broker not initialized.`);
+        }
     }
 
     public emit(event: string, payload: unknown): void {

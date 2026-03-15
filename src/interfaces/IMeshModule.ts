@@ -7,6 +7,7 @@ export interface IMeshModule {
   readonly name: string;
   logger?: ILogger;
   serviceBroker?: IServiceBroker;
+  dependencies?: string[];
 
   /** Initializes the module. Called before starting. */
   onInit?(app: IMeshApp): Promise<void> | void;

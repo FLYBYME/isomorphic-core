@@ -1,4 +1,5 @@
 import { IMeshApp, IMeshModule, ILogger, IServiceBroker } from '../interfaces/index';
+import { MeshError } from './MeshError';
 
 /**
  * BootOrchestrator — manages the multi-phase boot sequence of the MeshApp.
@@ -7,6 +8,7 @@ export class BootOrchestrator {
     constructor(private app: IMeshApp) { }
 
     public async executeBootSequence(modules: IMeshModule[]): Promise<void> {
+        this.checkCircularDependencies(modules);
         this.printBootGraph(modules);
         
         const logger = this.app.getProvider<ILogger>('logger');
@@ -63,6 +65,43 @@ export class BootOrchestrator {
         } catch (error) {
             this.app.logger.error(`[BootOrchestrator] Boot sequence aborted due to error:`, { error });
             throw error;
+        }
+    }
+
+    private checkCircularDependencies(modules: IMeshModule[]): void {
+        const visited = new Set<string>();
+        const stack = new Set<string>();
+        const moduleMap = new Map<string, IMeshModule>();
+        
+        for (const mod of modules) {
+            moduleMap.set(mod.name, mod);
+        }
+
+        const visit = (name: string) => {
+            if (stack.has(name)) {
+                throw new MeshError({
+                    message: `Circular dependency detected: ${Array.from(stack).join(' -> ')} -> ${name}`,
+                    code: 'CIRCULAR_DEPENDENCY',
+                    status: 500
+                });
+            }
+            if (visited.has(name)) return;
+
+            visited.add(name);
+            stack.add(name);
+
+            const mod = moduleMap.get(name);
+            if (mod && mod.dependencies) {
+                for (const dep of mod.dependencies) {
+                    visit(dep);
+                }
+            }
+
+            stack.delete(name);
+        };
+
+        for (const mod of modules) {
+            visit(mod.name);
         }
     }
 

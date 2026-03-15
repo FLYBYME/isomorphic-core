@@ -40,6 +40,9 @@ export interface IMeshApp extends IMeshNode {
     /** Registers a provider for DI. */
     registerProvider<T>(token: IProviderToken<T>, provider: T): void;
     
+    /** Checks if a provider exists. */
+    hasProvider<T>(token: IProviderToken<T>): boolean;
+
     /** Gets a provider from DI. */
     getProvider<T>(token: IProviderToken<T>): T;
  
