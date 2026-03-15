@@ -21,6 +21,13 @@ export type ServiceState =
     | 'paused'
     | 'errored';
 
+export interface ICronDefinition {
+    schedule: string;
+    action: string;
+    params?: Record<string, unknown>;
+    timeZone?: string;
+}
+
 export interface IServiceSchema {
     name: string;
     version?: string | number;
@@ -30,6 +37,7 @@ export interface IServiceSchema {
     actions?: Record<string, IActionDefinition<unknown, unknown>>;
     events?: Record<string, unknown>;
     methods?: Record<string, Function>;
+    cron?: ICronDefinition[];
     
     // Lifecycle hooks
     created?: (app: unknown) => void | Promise<void>;
