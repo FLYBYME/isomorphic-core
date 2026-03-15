@@ -117,14 +117,14 @@ export class ServiceBroker implements IServiceBroker {
         return ContextStack.getContext() as IContext<Record<string, unknown>, Record<string, unknown>> | undefined;
     }
 
-    public on(topic: string, handler: (payload: unknown) => void): (() => void) {
+    public on<T = unknown>(topic: string, handler: (payload: T, packet: IMeshPacket<T>) => void): (() => void) {
         if (!this.network) throw new Error('[ServiceBroker] Network not initialized');
         this.network.onMessage(topic, handler);
         return () => this.off(topic, handler);
     }
 
-    public off(topic: string, handler: (payload: unknown) => void): void {
-        const net = this.network as unknown as HasOptionalOff;
+    public off<T = unknown>(topic: string, handler: (payload: T, packet: IMeshPacket<T>) => void): void {
+        const net = this.network as unknown as { off(topic: string, handler: Function): void };
         if (typeof net.off === 'function') net.off(topic, handler);
     }
 

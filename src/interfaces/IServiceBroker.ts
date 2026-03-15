@@ -55,8 +55,8 @@ export interface IServiceBroker {
     emit(event: string, payload: unknown): void;
 
     /** Subscription to events. */
-    on(topic: string, handler: (payload: unknown) => void): (() => void);
-    off(topic: string, handler: (payload: unknown) => void): void;
+    on<T = unknown>(topic: string, handler: (payload: T, packet: IMeshPacket<T>) => void): (() => void);
+    off<T = unknown>(topic: string, handler: (payload: T, packet: IMeshPacket<T>) => void): void;
 
     /** Gets the current execution context. */
     getContext(): IContext<Record<string, unknown>, Record<string, unknown>> | undefined;
