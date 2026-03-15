@@ -10,6 +10,8 @@ export interface IMeshPacket<TPayload = unknown> {
     senderNodeID: string;
     targetNodeID?: string;
     timestamp: number;
+    version?: number; // Protocol version
+    priority?: number; // QoS: 0=low, 1=normal, 2=high (Raft/Kademlia)
     data?: TPayload;
     error?: { message: string, code?: string | number, data?: any };
     meta?: Record<string, unknown>;

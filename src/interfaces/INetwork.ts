@@ -9,6 +9,8 @@ export interface IMeshPacket<TPayload = unknown> {
     senderNodeID: string;
     targetNodeID?: string;
     timestamp: number;
+    version?: number; // Protocol version
+    priority?: number; // QoS
     data: TPayload;
     meta?: Record<string, unknown>;
 }

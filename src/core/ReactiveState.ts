@@ -36,7 +36,16 @@ export class ReactiveState<T extends Record<string, any>> {
         }
     }
 
-    private createProxy(obj: T): T {
+    private createProxy(obj: any): any {
+        if (typeof obj !== 'object' || obj === null || obj instanceof Date || obj instanceof RegExp) {
+            return obj;
+        }
+
+        // Handle nested objects by recursively proxying them
+        for (const key of Object.keys(obj)) {
+            obj[key] = this.createProxy(obj[key]);
+        }
+
         return new Proxy(obj, {
             get: (target, prop: string | symbol) => {
                 // Dependency Tracking: If a subscriber is currently active, link it.
@@ -45,11 +54,11 @@ export class ReactiveState<T extends Record<string, any>> {
                     const unsub = this.subscribe(() => subscriber.update());
                     subscriber.addSubscription(unsub);
                 }
-                return target[prop as keyof T];
+                return target[prop];
             },
             set: (target, prop: string | symbol, value: any) => {
-                if (target[prop as keyof T] !== value) {
-                    target[prop as keyof T] = value;
+                if (target[prop] !== value) {
+                    target[prop] = this.createProxy(value);
                     this.notify();
                 }
                 return true;

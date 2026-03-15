@@ -88,11 +88,15 @@ export class ServiceBroker implements IServiceBroker {
                 if (pending) {
                     clearTimeout(pending.timeout);
                     this.pendingRequests.delete(correlationId);
-                    if (packet.type === 'RESPONSE_ERROR') {
-                        const errorData = packet.error;
-                        pending.reject(new Error(errorData?.message || 'Remote RPC Error'));
-                    } else {
-                        pending.resolve(packet.data);
+                    try {
+                        if (packet.type === 'RESPONSE_ERROR') {
+                            const errorData = packet.error;
+                            pending.reject(new Error(errorData?.message || 'Remote RPC Error'));
+                        } else {
+                            pending.resolve(packet.data);
+                        }
+                    } catch (err) {
+                        this.logger.error(`[ServiceBroker] Unhandled exception in RPC response handler for ${correlationId}:`, err);
                     }
                 }
             }
@@ -129,21 +133,20 @@ export class ServiceBroker implements IServiceBroker {
         const serviceWithInit = service as unknown as HasOptionalOnInit;
         if (typeof serviceWithInit.onInit === 'function') serviceWithInit.onInit(this.app);
 
-        const prototype = Object.getPrototypeOf(service);
-        const methods = [...Object.getOwnPropertyNames(prototype), ...Object.getOwnPropertyNames(service)];
         const schemaActions = (service.actions || {}) as Record<string, { highSecurity?: boolean }>;
-        
         const serviceDict = service as unknown as Record<string, unknown>;
-        for (const method of methods) {
-            if (['constructor', 'db', 'name', 'logger', 'onInit', 'started', 'actions'].includes(method) || method.startsWith('_')) continue;
-            const handler = serviceDict[method];
+
+        for (const actionNameKey of Object.keys(schemaActions)) {
+            const handler = serviceDict[actionNameKey];
             if (typeof handler === 'function') {
-                const actionName = `${serviceName}.${method}`;
-                const metadata = schemaActions[method] || {};
+                const actionName = `${serviceName}.${actionNameKey}`;
+                const metadata = schemaActions[actionNameKey] || {};
                 this.localServices.set(actionName, {
                     handler: handler.bind(service) as (ctx: IContext<unknown, Record<string, unknown>>) => Promise<unknown>,
                     highSecurity: metadata.highSecurity === true
                 });
+            } else {
+                this.logger.warn(`[ServiceBroker] Action '${actionNameKey}' defined in schema for service '${serviceName}' but no handler found.`);
             }
         }
     }
@@ -181,7 +184,11 @@ export class ServiceBroker implements IServiceBroker {
             emit: (e: string, p: unknown) => this.emit(e as keyof IServiceEventRegistry, p)
         };
 
-        return await this.handlePipeline(ctx);
+        const result = await this.handlePipeline(ctx);
+        if (schema?.returns) {
+            return schema.returns.parse(result);
+        }
+        return result;
     }
 
     public async handleIncomingRPC(packet: IMeshPacket): Promise<unknown> {
@@ -201,7 +208,13 @@ export class ServiceBroker implements IServiceBroker {
             call: (a: string, p: unknown) => this.internalCall(a, p),
             emit: (e: string, p: unknown) => this.emit(e as keyof IServiceEventRegistry, p)
         };
-        return await this.handlePipeline(ctx);
+
+        const result = await this.handlePipeline(ctx);
+        const schema = MeshActionSchemaRegistry.get(packet.topic);
+        if (schema?.returns) {
+            return schema.returns.parse(result);
+        }
+        return result;
     }
 
     /**
@@ -251,11 +264,13 @@ export class ServiceBroker implements IServiceBroker {
             parentId: currentCtx?.parentId
         };
 
+        const timeoutMs = (meta.timeout as number) || (this.app.config.rpcTimeout as number) || 10000;
+
         return new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
                 this.pendingRequests.delete(requestId);
-                reject(new Error(`[ServiceBroker] RPC Timeout calling ${actionName} on ${nodeID}`));
-            }, 10000);
+                reject(new Error(`[ServiceBroker] RPC Timeout calling ${actionName} on ${nodeID} after ${timeoutMs}ms`));
+            }, timeoutMs);
             this.pendingRequests.set(requestId, { resolve, reject, timeout });
             this.network.send(nodeID, actionName, params, { 
                 id: requestId, 

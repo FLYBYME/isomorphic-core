@@ -11,10 +11,8 @@ export class BootOrchestrator {
         
         const logger = this.app.getProvider<ILogger>('logger');
         let broker: IServiceBroker | undefined;
-        try {
+        if (this.app.hasProvider('broker')) {
             broker = this.app.getProvider<IServiceBroker>('broker');
-        } catch (err) {
-            // Broker might be registered by one of the modules during onInit
         }
 
         try {
@@ -26,8 +24,8 @@ export class BootOrchestrator {
                 mod.logger = logger.child ? logger.child({ module: mod.name }) : logger;
                 
                 // Try to get broker if still missing
-                if (!broker) {
-                    try { broker = this.app.getProvider<IServiceBroker>('broker'); } catch (e) {}
+                if (!broker && this.app.hasProvider('broker')) {
+                    broker = this.app.getProvider<IServiceBroker>('broker');
                 }
                 
                 if (broker) {
@@ -39,8 +37,8 @@ export class BootOrchestrator {
                 }
 
                 // If broker was registered during mod.onInit, capture it for subsequent modules
-                if (!broker) {
-                    try { broker = this.app.getProvider<IServiceBroker>('broker'); } catch (e) {}
+                if (!broker && this.app.hasProvider('broker')) {
+                    broker = this.app.getProvider<IServiceBroker>('broker');
                 }
             }
 

@@ -22,6 +22,7 @@ export class ContextStack {
 
     /**
      * Executes a function within a context.
+     * Supports both synchronous and asynchronous functions.
      */
     public static run<T>(ctx: IContext, fn: () => T): T {
         if (this.storage) {
@@ -31,9 +32,17 @@ export class ContextStack {
         // Browser Fallback: Manual stack management
         this.browserStack.push(ctx);
         try {
-            return fn();
-        } finally {
+            const result = fn();
+            if (result instanceof Promise) {
+                return result.finally(() => {
+                    this.browserStack.pop();
+                }) as unknown as T;
+            }
             this.browserStack.pop();
+            return result;
+        } catch (err) {
+            this.browserStack.pop();
+            throw err;
         }
     }
 

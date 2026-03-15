@@ -44,10 +44,10 @@ export class MeshApp implements IMeshApp {
 
     public use(moduleOrMiddleware: IMeshModule | ((ctx: unknown, next: () => Promise<unknown>) => Promise<unknown>)): this {
         if (typeof moduleOrMiddleware === 'function') {
-            try {
+            if (this.hasProvider('broker')) {
                 const broker = this.getProvider<IServiceBroker>('broker');
                 broker.use(moduleOrMiddleware);
-            } catch (err) {
+            } else {
                 this.pendingMiddleware.push(moduleOrMiddleware);
             }
         } else {
@@ -57,19 +57,38 @@ export class MeshApp implements IMeshApp {
     }
 
     public registerService(service: IServiceSchema): this {
-        try {
+        if (this.hasProvider('broker')) {
             const broker = this.getProvider<IServiceBroker>('broker');
             broker.registerService(service);
-        } catch (err) {
+        } else {
             this.pendingServices.push(service);
         }
         return this;
     }
 
+    private getTokenKey<T>(token: IProviderToken<T>): string {
+        if (typeof token === 'string' || typeof token === 'symbol') {
+            return token.toString();
+        }
+        // Force explicit identifiers if available to prevent minification mangling.
+        const t = token as any;
+        if (t.id) return String(t.id);
+        if (t.name && t.name !== 'Function' && t.name !== 'Object') return t.name;
+        
+        throw new Error(`[MeshApp] Invalid provider token. Use a string, symbol, or a class/function with a stable name/id.`);
+    }
+
+    public hasProvider<T>(token: IProviderToken<T>): boolean {
+        try {
+            const key = this.getTokenKey(token);
+            return this.providers.has(key);
+        } catch {
+            return false;
+        }
+    }
+
     public registerProvider<T>(token: IProviderToken<T>, provider: T): void {
-        const key = typeof token === 'string' || typeof token === 'symbol'
-            ? token.toString()
-            : (token as unknown as { name: string }).name;
+        const key = this.getTokenKey(token);
         this.providers.set(key, provider);
 
         if (key === 'broker') {
@@ -85,9 +104,7 @@ export class MeshApp implements IMeshApp {
     }
 
     public getProvider<T>(token: IProviderToken<T>): T {
-        const key = typeof token === 'string' || typeof token === 'symbol'
-            ? token.toString()
-            : (token as unknown as { name: string }).name;
+        const key = this.getTokenKey(token);
         const provider = this.providers.get(key);
         if (provider === undefined) {
             throw new Error(`[MeshApp] Provider not found for token: ${key}`);
