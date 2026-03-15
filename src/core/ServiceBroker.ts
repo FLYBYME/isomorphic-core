@@ -28,7 +28,7 @@ interface HasOptionalOff { off?(topic: string, handler: (payload: unknown) => vo
  * Metadata for local actions.
  */
 interface LocalAction {
-    handler: (ctx: IContext<unknown, Record<string, unknown>>) => Promise<unknown>;
+    handler: (ctx: IContext<Record<string, unknown>, Record<string, unknown>>) => Promise<unknown>;
     highSecurity?: boolean;
 }
 
@@ -113,8 +113,8 @@ export class ServiceBroker implements IServiceBroker {
         this.localMiddleware.push(mw);
     }
 
-    public getContext(): IContext<unknown, Record<string, unknown>> | undefined {
-        return ContextStack.getContext() as IContext<unknown, Record<string, unknown>> | undefined;
+    public getContext(): IContext<Record<string, unknown>, Record<string, unknown>> | undefined {
+        return ContextStack.getContext() as IContext<Record<string, unknown>, Record<string, unknown>> | undefined;
     }
 
     public on(topic: string, handler: (payload: unknown) => void): (() => void) {
@@ -156,7 +156,7 @@ export class ServiceBroker implements IServiceBroker {
                 });
 
                 this.localServices.set(actionName, {
-                    handler: handler.bind(service) as (ctx: IContext<unknown, Record<string, unknown>>) => Promise<unknown>,
+                    handler: (handler as Function).bind(service) as (ctx: IContext<unknown, Record<string, unknown>>) => Promise<unknown>,
                     highSecurity: (actionDef as any).highSecurity === true
                 });
             } else {
@@ -183,19 +183,19 @@ export class ServiceBroker implements IServiceBroker {
         const parentId = parentCtx?.spanId;
         const spanId = nanoid();
 
-        const ctx: IContext<any, Record<string, any>> = {
+        const ctx: IContext<Record<string, unknown>, Record<string, unknown>> = {
             id: nanoid(),
             correlationID: parentCtx?.correlationID || nanoid(),
             actionName, 
-            params,
+            params: params as Record<string, unknown>,
             meta: { ...parentCtx?.meta },
             callerID: parentCtx?.id || null,
             nodeID: this.app.nodeID,
             traceId,
             spanId,
             parentId,
-            call: (a: string, p: unknown) => this.internalCall(a, p),
-            emit: (e: string, p: unknown) => this.emit(e as keyof IServiceEventRegistry, p)
+            call: (a: string, p: Record<string, unknown>) => this.internalCall(a, p),
+            emit: (e: string, p: Record<string, unknown>) => this.emit(e as keyof IServiceEventRegistry, p)
         };
 
         const result = await this.handlePipeline(ctx);
@@ -206,21 +206,21 @@ export class ServiceBroker implements IServiceBroker {
     }
 
     public async handleIncomingRPC(packet: IMeshPacket): Promise<unknown> {
-        const meta = (packet.meta as Record<string, any>) || {};
+        const meta = (packet.meta as Record<string, unknown>) || {};
         
-        const ctx: IContext<any, Record<string, any>> = {
+        const ctx: IContext<Record<string, unknown>, Record<string, unknown>> = {
             id: packet.id,
             correlationID: (packet.meta?.correlationID as string) || packet.id,
             actionName: packet.topic, 
-            params: packet.data,
+            params: packet.data as Record<string, unknown>,
             meta,
             callerID: packet.senderNodeID,
             nodeID: this.app.nodeID,
-            traceId: meta.traceId || nanoid(),
-            spanId: meta.spanId || nanoid(),
-            parentId: meta.parentId,
-            call: (a: string, p: unknown) => this.internalCall(a, p),
-            emit: (e: string, p: unknown) => this.emit(e as keyof IServiceEventRegistry, p)
+            traceId: (meta.traceId as string) || nanoid(),
+            spanId: (meta.spanId as string) || nanoid(),
+            parentId: meta.parentId as string,
+            call: (a: string, p: Record<string, unknown>) => this.internalCall(a, p),
+            emit: (e: string, p: Record<string, unknown>) => this.emit(e as keyof IServiceEventRegistry, p)
         };
 
         const result = await this.handlePipeline(ctx);
@@ -234,7 +234,7 @@ export class ServiceBroker implements IServiceBroker {
     /**
      * Bipartite Pipeline Execution Engine.
      */
-    public async handlePipeline(ctx: IContext<any, Record<string, any>>): Promise<unknown> {
+    public async handlePipeline(ctx: IContext<Record<string, unknown>, Record<string, unknown>>): Promise<unknown> {
         return await ContextStack.run(ctx as any, async () => {
             try {
                 // Determine if it's a local call or needs remote dispatch
@@ -260,20 +260,20 @@ export class ServiceBroker implements IServiceBroker {
                 return await this.executeChain(ctx, chain, finalHandler);
 
             } catch (err) {
-                (ctx as any).error = err;
-                throw err;
+                (ctx as any).error = err instanceof Error ? err : new Error(String(err));
+                throw ctx.error;
             }
         });
     }
 
     private async executeChain(
-        ctx: IContext<any, Record<string, any>>, 
+        ctx: IContext<Record<string, unknown>, Record<string, unknown>>, 
         chain: IMiddleware[], 
         finalHandler: () => Promise<unknown>
     ): Promise<unknown> {
         const executeNext = async (index: number): Promise<unknown> => {
             if (index < chain.length) {
-                return await chain[index](ctx, () => executeNext(index + 1));
+                return await chain[index](ctx as any, () => executeNext(index + 1));
             }
             return await finalHandler();
         };

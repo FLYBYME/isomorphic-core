@@ -31,7 +31,7 @@ export interface IServiceBroker {
     registerService(service: IServiceSchema): void;
 
     /** Fully processes a context through the pipeline. */
-    handlePipeline(ctx: IContext<unknown, Record<string, unknown>>): Promise<unknown>;
+    handlePipeline(ctx: IContext<Record<string, unknown>, Record<string, unknown>>): Promise<unknown>;
 
     /** Low-level execution (used by NetworkPlugin for inbound requests) */
     handleIncomingRPC(packet: IMeshPacket): Promise<unknown>;
@@ -59,7 +59,7 @@ export interface IServiceBroker {
     off(topic: string, handler: (payload: unknown) => void): void;
 
     /** Gets the current execution context. */
-    getContext(): IContext<unknown, Record<string, unknown>> | undefined;
+    getContext(): IContext<Record<string, unknown>, Record<string, unknown>> | undefined;
 
     /** Starts the broker and its plugins. */
     start(): Promise<void>;

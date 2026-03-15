@@ -12,7 +12,7 @@ export class BrokerModule implements IMeshModule {
     private broker!: ServiceBroker;
 
     private pendingPlugins: IBrokerPlugin[] = [];
-    private pendingMiddleware: ((ctx: IContext<unknown, Record<string, unknown>>, next: () => Promise<unknown>) => Promise<unknown>)[] = [];
+    private pendingMiddleware: ((ctx: IContext<Record<string, unknown>, Record<string, unknown>>, next: () => Promise<unknown>) => Promise<unknown>)[] = [];
 
     onInit(app: IMeshApp): void {
         this.broker = new ServiceBroker(app);
@@ -35,11 +35,11 @@ export class BrokerModule implements IMeshModule {
     /**
      * Registers a middleware directly.
      */
-    public use(middleware: (ctx: IContext<unknown, Record<string, unknown>>, next: () => Promise<unknown>) => Promise<unknown>): this {
+    public use(middleware: (ctx: IContext<Record<string, unknown>, Record<string, unknown>>, next: () => Promise<unknown>) => Promise<unknown>): this {
         if (!this.broker) {
             this.pendingMiddleware.push(middleware);
         } else {
-            this.broker.use(middleware);
+            this.broker.use(middleware as any); // Cast middleware internally for broker integration
         }
         return this;
     }

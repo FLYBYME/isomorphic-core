@@ -63,8 +63,9 @@ export class BootOrchestrator {
                 }
             }
         } catch (error) {
-            this.app.logger.error(`[BootOrchestrator] Boot sequence aborted due to error:`, { error });
-            throw error;
+            const err = error instanceof Error ? error : new Error(String(error));
+            this.app.logger.error(`[BootOrchestrator] Boot sequence aborted due to error:`, { error: err.message });
+            throw err;
         }
     }
 

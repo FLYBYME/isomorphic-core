@@ -1,7 +1,8 @@
 import { ILogger } from './ILogger';
 import { IServiceRegistry } from './IServiceRegistry';
 
-export type PacketType = 'REQUEST' | 'RESPONSE' | 'RESPONSE_ERROR' | 'EVENT' | 'AUTH' | 'PING';
+export type PacketType = 'REQUEST' | 'RESPONSE' | 'RESPONSE_ERROR' | 'EVENT' | 'AUTH' | 'PING'
+    | 'STREAM_OPEN' | 'STREAM_DATA' | 'STREAM_ACK' | 'STREAM_CLOSE' | 'STREAM_ERROR';
 
 export interface IMeshPacket<TPayload = unknown> {
     id: string;
@@ -13,8 +14,9 @@ export interface IMeshPacket<TPayload = unknown> {
     version?: number; // Protocol version
     priority?: number; // QoS: 0=low, 1=normal, 2=high (Raft/Kademlia)
     data?: TPayload;
-    error?: { message: string, code?: string | number, data?: any };
+    error?: { message: string, code?: string | number, data?: unknown };
     meta?: Record<string, unknown>;
+    streamID?: string;
 }
 
 export type IMeshNetworkSubscriptionHandler<T = unknown> = (data: T, packet: IMeshPacket<T>) => void | Promise<void>;

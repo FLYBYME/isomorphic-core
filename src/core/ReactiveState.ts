@@ -2,7 +2,7 @@
  * ReactiveState — Proxy-based state container with auto-subscription.
  * Implementation of the "Magic Sauce" for isomorphic-ui.
  */
-export class ReactiveState<T extends Record<string, any>> {
+export class ReactiveState<T extends Record<string, unknown>> {
     private _data: T;
     private listeners = new Set<() => void>();
 
@@ -36,7 +36,7 @@ export class ReactiveState<T extends Record<string, any>> {
         }
     }
 
-    private createProxy(obj: any): any {
+    private createProxy(obj: Record<string, unknown>): any {
         if (typeof obj !== 'object' || obj === null || obj instanceof Date || obj instanceof RegExp) {
             return obj;
         }
@@ -44,18 +44,18 @@ export class ReactiveState<T extends Record<string, any>> {
         // Removed recursive proxying to make it shallow-only as per "intended behavior" check
 
         return new Proxy(obj, {
-            get: (target, prop: string | symbol) => {
+            get: (target: Record<string, unknown>, prop: string | symbol) => {
                 // Dependency Tracking: If a subscriber is currently active, link it.
                 if (ReactiveState.currentSubscriber) {
                     const subscriber = ReactiveState.currentSubscriber;
                     const unsub = this.subscribe(() => subscriber.update());
                     subscriber.addSubscription(unsub);
                 }
-                return target[prop];
+                return target[prop as string];
             },
-            set: (target, prop: string | symbol, value: any) => {
-                if (target[prop] !== value) {
-                    target[prop] = value;
+            set: (target: Record<string, unknown>, prop: string | symbol, value: unknown) => {
+                if (target[prop as string] !== value) {
+                    target[prop as string] = value;
                     this.notify();
                 }
                 return true;

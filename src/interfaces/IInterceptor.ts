@@ -3,7 +3,7 @@ import { ILogger } from './ILogger';
 
 export type INextFunction<TReturn = unknown> = () => Promise<TReturn>;
 
-export type IMiddleware<TParams = unknown, TMeta = Record<string, unknown>, TReturn = unknown> = (
+export type IMiddleware<TParams = Record<string, unknown>, TMeta = Record<string, unknown>, TReturn = unknown> = (
     ctx: IContext<TParams, TMeta>,
     next: INextFunction<TReturn>
 ) => Promise<TReturn>;
@@ -12,11 +12,11 @@ export type IMiddleware<TParams = unknown, TMeta = Record<string, unknown>, TRet
  * IInterceptor — Strictly typed middleware interceptor.
  * Can be used for Broker actions (handler) or Network packets (onInbound/onOutbound).
  */
-export interface IInterceptor<TIn = any, TOut = any> {
+export interface IInterceptor<TIn = unknown, TOut = unknown> {
     name: string;
     
     /** Used for ServiceBroker action middleware */
-    handler?(context: IContext<any>, next: INextFunction<any>): Promise<any>;
+    handler?(context: IContext<Record<string, unknown>, Record<string, unknown>>, next: INextFunction<unknown>): Promise<unknown>;
 
     /** Used for Network packet interception */
     onInbound?(packet: TIn): Promise<TIn> | TIn;

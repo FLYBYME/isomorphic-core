@@ -14,7 +14,7 @@ export interface ITraceMeta {
  * IContext — Core execution context for actions and events.
  * Static shape for V8 optimization.
  */
-export interface IContext<TParams = Record<string, any>, TMeta = Record<string, any>> {
+export interface IContext<TParams = Record<string, unknown>, TMeta = Record<string, unknown>> {
     readonly id: string;
     readonly actionName: string;
     readonly params: TParams;
@@ -30,12 +30,12 @@ export interface IContext<TParams = Record<string, any>, TMeta = Record<string, 
     
     // Pipeline control properties (pre-defined for stability)
     targetNodeID?: string;
-    result?: any; 
+    result?: unknown; 
     error?: Error | null;
 
     // Database and Repository injection (optional)
-    db?: { query: (sql: string, params: any[]) => Promise<any[]> }; 
-    repos?: Record<string, { find: (id: string) => Promise<any> }>;
+    db?: { query: (sql: string, params: unknown[]) => Promise<Record<string, unknown>[]> }; 
+    repos?: Record<string, { find: (id: string) => Promise<Record<string, unknown> | null> }>;
 
     /** Calls a mesh action with strict inference from context. */
     call<K extends keyof IServiceActionRegistry>(
@@ -44,7 +44,7 @@ export interface IContext<TParams = Record<string, any>, TMeta = Record<string, 
     ): Promise<IServiceActionRegistry[K] extends { returns: import('zod').ZodType<infer R> } ? R : never>;
 
     /** Fallback untyped call. */
-    call<TResult>(action: string, params: Record<string, any>): Promise<TResult>;
+    call<TResult = unknown>(action: string, params: Record<string, unknown>): Promise<TResult>;
 
     /** Emits a mesh event with strict inference. */
     emit<K extends keyof IServiceEventRegistry>(
@@ -53,5 +53,5 @@ export interface IContext<TParams = Record<string, any>, TMeta = Record<string, 
     ): void;
 
     /** Fallback untyped emit. */
-    emit(event: string, payload: Record<string, any>): void;
+    emit(event: string, payload: Record<string, unknown>): void;
 }

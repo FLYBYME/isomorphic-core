@@ -14,20 +14,20 @@ export class ConfigModule<TSchema extends z.ZodObject<any>> implements IMeshModu
         this.config = this.schema.parse(this.deepMerge(this.getDefaults(), this.values));
     }
 
-    private getDefaults(): any {
+    private getDefaults(): Record<string, unknown> {
         // Zod defaults extraction is non-trivial but for this test we'll assume passed values handle it 
         // or just return an empty object if we want it to be truly optional.
         return {};
     }
 
-    private deepMerge(target: any, source: any): any {
+    private deepMerge(target: Record<string, unknown>, source: Record<string, unknown>): Record<string, unknown> {
         if (!source) return target;
-        const output = { ...target };
+        const output: Record<string, unknown> = { ...target };
         for (const key of Object.keys(source)) {
             const sourceValue = source[key];
             const targetValue = target[key];
             if (sourceValue && typeof sourceValue === 'object' && !Array.isArray(sourceValue)) {
-                output[key] = this.deepMerge(targetValue || {}, sourceValue);
+                output[key] = this.deepMerge((targetValue as Record<string, unknown>) || {}, sourceValue as Record<string, unknown>);
             } else {
                 output[key] = sourceValue;
             }

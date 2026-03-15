@@ -11,7 +11,7 @@ export class MeshApp implements IMeshApp {
     public readonly logger: ILogger;
 
     protected modules: IMeshModule[] = [];
-    protected pendingMiddleware: ((ctx: IContext<unknown, Record<string, unknown>>, next: () => Promise<unknown>) => Promise<unknown>)[] = [];
+    protected pendingMiddleware: ((ctx: IContext<Record<string, unknown>, Record<string, unknown>>, next: () => Promise<unknown>) => Promise<unknown>)[] = [];
     protected providers = new Map<string, unknown>();
     protected pendingServices: IServiceSchema[] = [];
     public orchestrator: BootOrchestrator;
@@ -23,10 +23,10 @@ export class MeshApp implements IMeshApp {
         this.orchestrator = new BootOrchestrator(this as IMeshApp);
 
         this.logger = (config['logger'] as ILogger) || {
-            debug: (msg: string, data?: unknown) => console.debug(`[${this.nodeID}] ${msg}`, data || ''),
-            info: (msg: string, data?: unknown) => console.info(`[${this.nodeID}] ${msg}`, data || ''),
-            warn: (msg: string, data?: unknown) => console.warn(`[${this.nodeID}] ${msg}`, data || ''),
-            error: (msg: string, data?: unknown) => console.error(`[${this.nodeID}] ${msg}`, data || ''),
+            debug: (msg: string, data?: Record<string, unknown>) => console.debug(`[${this.nodeID}] ${msg}`, data || ''),
+            info: (msg: string, data?: Record<string, unknown>) => console.info(`[${this.nodeID}] ${msg}`, data || ''),
+            warn: (msg: string, data?: Record<string, unknown>) => console.warn(`[${this.nodeID}] ${msg}`, data || ''),
+            error: (msg: string, data?: Record<string, unknown>) => console.error(`[${this.nodeID}] ${msg}`, data || ''),
             child: () => this.logger
         };
 
@@ -38,15 +38,15 @@ export class MeshApp implements IMeshApp {
         return this.getProvider<IServiceRegistry>('registry');
     }
 
-    public getConfig(): Record<string, unknown> {
+    public getConfig(): AppConfig {
         return this.config;
     }
 
-    public use(moduleOrMiddleware: IMeshModule | ((ctx: unknown, next: () => Promise<unknown>) => Promise<unknown>)): this {
+    public use(moduleOrMiddleware: IMeshModule | ((ctx: IContext<Record<string, unknown>, Record<string, unknown>>, next: () => Promise<unknown>) => Promise<unknown>)): this {
         if (typeof moduleOrMiddleware === 'function') {
             if (this.hasProvider('broker')) {
                 const broker = this.getProvider<IServiceBroker>('broker');
-                broker.use(moduleOrMiddleware);
+                broker.use(moduleOrMiddleware as any); // Type narrowing middleware is complex, cast to any temporarily but interface is strict
             } else {
                 this.pendingMiddleware.push(moduleOrMiddleware);
             }
@@ -71,7 +71,7 @@ export class MeshApp implements IMeshApp {
             return token.toString();
         }
         // Force explicit identifiers if available to prevent minification mangling.
-        const t = token as any;
+        const t = token as unknown as { id?: string | symbol; name?: string };
         if (t.id) return String(t.id);
         if (t.name && t.name !== 'Function' && t.name !== 'Object') return t.name;
         

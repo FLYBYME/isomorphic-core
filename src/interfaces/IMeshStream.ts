@@ -6,7 +6,7 @@ export type StreamStatus = 'OPEN' | 'PAUSED' | 'CLOSED' | 'ERROR';
 /**
  * IMeshStream — The primary interface for a backpressure-aware stream handle.
  */
-export interface IMeshStream<TParams = any, TResult = any> {
+export interface IMeshStream<TParams = Record<string, unknown>, TResult = unknown> {
     /** Unique UUID/Nanoid for the stream instance. */
     readonly id: string;
     
@@ -41,9 +41,9 @@ export interface IMeshStream<TParams = any, TResult = any> {
 /**
  * IStreamContext — Extends IContext to provide stream-specific utilities.
  */
-export interface IStreamContext<TParams = any, TMeta = Record<string, any>> extends IContext<TParams, TMeta> {
+export interface IStreamContext<TParams = Record<string, unknown>, TMeta = Record<string, unknown>> extends IContext<TParams, TMeta> {
     /** Access to the underlying stream controller. */
-    readonly stream: IMeshStream<TParams, any>;
+    readonly stream: IMeshStream<TParams, unknown>;
     
     /** Flag indicating if the consumer has disconnected. */
     readonly isCanceled: boolean;
