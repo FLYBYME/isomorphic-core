@@ -11,6 +11,7 @@ export * from './IError';
 export * from './IProviderToken';
 export * from './IServiceRegistry';
 export * from './IMeshNetwork';
+export * from './IMeshStream';
 
 // Adapters
 export * from './adapters/IStorageAdapter';

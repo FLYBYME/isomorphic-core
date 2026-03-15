@@ -10,7 +10,9 @@ import {
     IServiceEventRegistry,
     IBrokerPlugin,
     IServiceSchema,
-    IMiddleware
+    IActionDefinition,
+    IMiddleware,
+
 } from '../interfaces';
 import { nanoid } from 'nanoid';
 import { z } from 'zod';
