@@ -1,4 +1,4 @@
-import { IMeshApp, IMeshModule, AppConfig, IProviderToken, IContext, ILogger, IServiceBroker, IServiceInstance, IServiceSchema } from '../interfaces';
+import { IMeshApp, IMeshModule, AppConfig, IProviderToken, IContext, ILogger, IServiceBroker, IServiceInstance, IServiceSchema, IServiceRegistry } from '../interfaces';
 import { BootOrchestrator } from './BootOrchestrator';
 
 /**
@@ -20,7 +20,7 @@ export class MeshApp implements IMeshApp {
         this.nodeID = config.nodeID;
         this.namespace = config.namespace || 'default';
         this.config = config;
-        this.orchestrator = new BootOrchestrator(this);
+        this.orchestrator = new BootOrchestrator(this as IMeshApp);
 
         this.logger = (config['logger'] as ILogger) || {
             debug: (msg: string, data?: unknown) => console.debug(`[${this.nodeID}] ${msg}`, data || ''),
@@ -31,7 +31,15 @@ export class MeshApp implements IMeshApp {
         };
 
         this.registerProvider('logger' as IProviderToken<ILogger>, this.logger);
-        this.registerProvider('app' as IProviderToken<IMeshApp>, this);
+        this.registerProvider('app' as IProviderToken<IMeshApp>, this as IMeshApp);
+    }
+
+    public get registry(): IServiceRegistry {
+        return this.getProvider<IServiceRegistry>('registry');
+    }
+
+    public getConfig(): Record<string, unknown> {
+        return this.config;
     }
 
     public use(moduleOrMiddleware: IMeshModule | ((ctx: unknown, next: () => Promise<unknown>) => Promise<unknown>)): this {

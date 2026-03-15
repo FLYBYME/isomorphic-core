@@ -3,15 +3,28 @@ import { ILogger } from './ILogger';
 import { IServiceSchema } from './IService';
 import { IProviderToken } from './IProviderToken';
 
+import { IServiceRegistry } from './IServiceRegistry';
+
 export interface AppConfig extends Record<string, unknown> {
     nodeID: string;
     namespace?: string;
 }
 
 /**
+ * IMeshNode — Base interface for a node in the mesh.
+ */
+export interface IMeshNode {
+    readonly nodeID: string;
+    readonly namespace: string;
+    readonly logger: ILogger;
+    readonly registry: IServiceRegistry;
+    getConfig?(): Record<string, unknown>;
+}
+
+/**
  * IMeshApp — Core container for the mesh application.
  */
-export interface IMeshApp {
+export interface IMeshApp extends IMeshNode {
     readonly nodeID: string;
     readonly config: AppConfig;
     readonly logger: ILogger;

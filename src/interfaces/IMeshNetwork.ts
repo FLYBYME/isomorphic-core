@@ -1,4 +1,5 @@
 import { ILogger } from './ILogger';
+import { IServiceRegistry } from './IServiceRegistry';
 
 export type PacketType = 'REQUEST' | 'RESPONSE' | 'RESPONSE_ERROR' | 'EVENT' | 'AUTH' | 'PING';
 
@@ -21,7 +22,9 @@ export type IMeshNetworkSubscriptionHandler<T = unknown> = (data: T, packet: IMe
  */
 export interface IMeshNetwork {
     readonly nodeID: string;
+    readonly namespace: string;
     readonly logger: ILogger;
+    readonly registry: IServiceRegistry;
     
     send<T = unknown>(targetNodeID: string, topic: string, data: T, options?: Partial<IMeshPacket<T>>): Promise<void>;
     publish<T = unknown>(topic: string, data: T): Promise<void>;

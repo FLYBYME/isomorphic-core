@@ -2,21 +2,19 @@ import { IContext } from './IContext';
 import { ILogger } from './ILogger';
 import { IServiceBroker } from './IServiceBroker';
 
-export interface IActionDefinition<TParams = unknown, TReturns = unknown> {
-    params: import('zod').ZodType<TParams>;
-    returns: import('zod').ZodType<TReturns>;
+export interface IActionDefinition<TParams = any, TReturns = any> {
+    params: any;
+    returns: any;
     handler: IActionHandler;
-    highSecurity?: boolean;
 }
 
-export type IActionHandler = (ctx: IContext<unknown>) => Promise<unknown>;
+export type IActionHandler = (ctx: IContext<any, any>) => Promise<any>;
 
 export type ServiceState = 
-    | 'initializing'
-    | 'starting'
-    | 'running'
-    | 'stopping'
+    | 'started'
     | 'stopped'
+    | 'starting'
+    | 'stopping'
     | 'pausing'
     | 'paused'
     | 'errored';
@@ -43,8 +41,6 @@ export interface IServiceSchema {
     created?: (app: unknown) => void | Promise<void>;
     started?: () => void | Promise<void>;
     stopped?: () => void | Promise<void>;
-    paused?: () => void | Promise<void>;
-    resumed?: () => void | Promise<void>;
 }
 
 export interface IServiceInstance<TSchema extends IServiceSchema = IServiceSchema> {
