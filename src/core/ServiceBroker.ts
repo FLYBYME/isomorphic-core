@@ -37,7 +37,7 @@ export const MeshActionSchemaRegistry: Map<string, { params: z.ZodTypeAny, retur
 
 /**
  * ServiceBroker — The "OS Kernel" that routes requests locally or remotely.
- * Refactored to be a pure middleware pipe with ZERO 'any' casts.
+ * Production-Grade implementation with Bipartite Pipeline.
  */
 export class ServiceBroker implements IServiceBroker {
     private localServices = new Map<string, LocalAction>();
@@ -169,7 +169,9 @@ export class ServiceBroker implements IServiceBroker {
             params,
             meta: { ...parentCtx?.meta },
             callerID: parentCtx?.id || null,
-            nodeID: this.app.nodeID
+            nodeID: this.app.nodeID,
+            call: (a: string, p: unknown) => this.internalCall(a, p),
+            emit: (e: string, p: unknown) => this.emit(e as keyof IServiceEventRegistry, p)
         };
 
         return await this.handlePipeline(ctx);
@@ -183,11 +185,16 @@ export class ServiceBroker implements IServiceBroker {
             params: packet.data,
             meta: (packet.meta as Record<string, unknown>) || {},
             callerID: packet.senderNodeID,
-            nodeID: this.app.nodeID
+            nodeID: this.app.nodeID,
+            call: (a: string, p: unknown) => this.internalCall(a, p),
+            emit: (e: string, p: unknown) => this.emit(e as keyof IServiceEventRegistry, p)
         };
         return await this.handlePipeline(ctx);
     }
 
+    /**
+     * Bipartite Pipeline Execution Engine.
+     */
     public async handlePipeline(ctx: IContext<unknown, Record<string, unknown>>): Promise<unknown> {
         return await ContextStack.run(ctx, async () => {
             try {
