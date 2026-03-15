@@ -17,7 +17,9 @@ export type ServiceState =
     | 'stopping'
     | 'pausing'
     | 'paused'
-    | 'errored';
+    | 'errored'
+    | 'initializing'
+    | 'running';
 
 export interface ICronDefinition {
     schedule: string;
@@ -41,6 +43,8 @@ export interface IServiceSchema {
     created?: (app: unknown) => void | Promise<void>;
     started?: () => void | Promise<void>;
     stopped?: () => void | Promise<void>;
+    paused?: () => void | Promise<void>;
+    resumed?: () => void | Promise<void>;
 }
 
 export interface IServiceInstance<TSchema extends IServiceSchema = IServiceSchema> {
