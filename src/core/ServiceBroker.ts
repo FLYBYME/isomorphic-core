@@ -162,6 +162,10 @@ export class ServiceBroker implements IServiceBroker {
         if (schema) params = schema.params.parse(params);
         
         const parentCtx = this.getContext();
+        const traceId = parentCtx?.traceId || nanoid();
+        const parentId = parentCtx?.spanId;
+        const spanId = nanoid();
+
         const ctx: IContext<any, Record<string, any>> = {
             id: nanoid(),
             correlationID: parentCtx?.correlationID || nanoid(),
@@ -170,6 +174,9 @@ export class ServiceBroker implements IServiceBroker {
             meta: { ...parentCtx?.meta },
             callerID: parentCtx?.id || null,
             nodeID: this.app.nodeID,
+            traceId,
+            spanId,
+            parentId,
             call: (a: string, p: unknown) => this.internalCall(a, p),
             emit: (e: string, p: unknown) => this.emit(e as keyof IServiceEventRegistry, p)
         };
@@ -178,14 +185,19 @@ export class ServiceBroker implements IServiceBroker {
     }
 
     public async handleIncomingRPC(packet: IMeshPacket): Promise<unknown> {
+        const meta = (packet.meta as Record<string, any>) || {};
+        
         const ctx: IContext<any, Record<string, any>> = {
             id: packet.id,
             correlationID: (packet.meta?.correlationID as string) || packet.id,
             actionName: packet.topic, 
             params: packet.data,
-            meta: (packet.meta as Record<string, any>) || {},
+            meta,
             callerID: packet.senderNodeID,
             nodeID: this.app.nodeID,
+            traceId: meta.traceId || nanoid(),
+            spanId: meta.spanId || nanoid(),
+            parentId: meta.parentId,
             call: (a: string, p: unknown) => this.internalCall(a, p),
             emit: (e: string, p: unknown) => this.emit(e as keyof IServiceEventRegistry, p)
         };
@@ -231,6 +243,14 @@ export class ServiceBroker implements IServiceBroker {
     public async executeRemote(nodeID: string, actionName: string, params: unknown, meta: Record<string, unknown> = {}): Promise<unknown> {
         if (!this.network) throw new Error('[ServiceBroker] Network not initialized');
         const requestId = nanoid();
+        
+        const currentCtx = this.getContext();
+        const tracingMeta = {
+            traceId: currentCtx?.traceId,
+            spanId: currentCtx?.spanId,
+            parentId: currentCtx?.parentId
+        };
+
         return new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
                 this.pendingRequests.delete(requestId);
@@ -238,7 +258,11 @@ export class ServiceBroker implements IServiceBroker {
             }, 10000);
             this.pendingRequests.set(requestId, { resolve, reject, timeout });
             this.network.send(nodeID, actionName, params, { 
-                id: requestId, type: 'REQUEST', meta: { ...meta, correlationID: requestId }, senderNodeID: this.app.nodeID, topic: actionName
+                id: requestId, 
+                type: 'REQUEST', 
+                meta: { ...meta, ...tracingMeta, correlationID: requestId }, 
+                senderNodeID: this.app.nodeID, 
+                topic: actionName
             }).catch(err => {
                 clearTimeout(timeout);
                 this.pendingRequests.delete(requestId);
