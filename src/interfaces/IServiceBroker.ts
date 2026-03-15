@@ -42,11 +42,16 @@ export interface IServiceBroker {
     /** Typed mesh action call. */
     call<K extends keyof IServiceActionRegistry>(
         action: K, 
-        params: any
+        params: any,
+        options?: { nodeID?: string; timeout?: number }
     ): Promise<any>;
 
     /** Fallback untyped call. */
-    call<TResult = unknown>(action: string, params: unknown): Promise<TResult>;
+    call<TResult = unknown>(
+        action: string, 
+        params: unknown, 
+        options?: { nodeID?: string; timeout?: number }
+    ): Promise<TResult>;
 
     /** Typed mesh event emit. */
     emit<K extends keyof IServiceEventRegistry>(event: K, payload: any): void;

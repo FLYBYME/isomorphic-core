@@ -25,6 +25,7 @@ export interface NodeInfo {
     activeRequests?: number;
     lastHeartbeatTime?: number;
     publicKey?: string;
+    metadata?: Record<string, unknown>;
 }
 
 /**

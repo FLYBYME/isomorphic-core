@@ -165,8 +165,8 @@ export class ServiceBroker implements IServiceBroker {
         }
     }
 
-    public async call<K extends keyof IServiceActionRegistry>(action: K, params: unknown): Promise<unknown> {
-        return this.internalCall(action as string, params);
+    public async call<K extends keyof IServiceActionRegistry>(action: K, params: unknown, options?: { nodeID?: string; timeout?: number }): Promise<unknown> {
+        return this.internalCall(action as string, params, options);
     }
 
     public emit<K extends keyof IServiceEventRegistry>(event: K, payload: unknown): void {
@@ -174,7 +174,7 @@ export class ServiceBroker implements IServiceBroker {
         this.network.send('*', event as string, payload);
     }
 
-    private async internalCall(actionName: string, params: unknown): Promise<unknown> {
+    private async internalCall(actionName: string, params: unknown, options?: { nodeID?: string; timeout?: number }): Promise<unknown> {
         const schema = MeshActionSchemaRegistry.get(actionName);
         if (schema) params = schema.params.parse(params);
         
@@ -188,7 +188,8 @@ export class ServiceBroker implements IServiceBroker {
             correlationID: parentCtx?.correlationID || nanoid(),
             actionName, 
             params: params as Record<string, unknown>,
-            meta: { ...parentCtx?.meta },
+            meta: { ...parentCtx?.meta, timeout: options?.timeout },
+            targetNodeID: options?.nodeID,
             callerID: parentCtx?.id || null,
             nodeID: this.app.nodeID,
             traceId,
