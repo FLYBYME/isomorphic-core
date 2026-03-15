@@ -19,6 +19,8 @@ export interface IMeshNode {
     readonly logger: ILogger;
     readonly registry: IServiceRegistry;
     getConfig?(): Record<string, unknown>;
+    publish<T = unknown>(topic: string, data: T): Promise<void>;
+    orchestrator?: any; // To be typed properly if needed, or left as any for flexibility across packages
 }
 
 /**
