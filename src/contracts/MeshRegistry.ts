@@ -1,1 +1,1 @@
-export { MeshActionRegistry, MeshEventRegistry, IMeshTransceiver } from 'isomorphic-registry';
+export { IServiceActionRegistry as MeshActionRegistry, IServiceEventRegistry as MeshEventRegistry } from '../interfaces';

@@ -1,20 +1,15 @@
 import { z } from 'zod';
-import { Context } from 'isomorphic-registry';
+import { IContext, IActionDefinition, IActionHandler } from '../interfaces/index';
 
 export type InferZod<T> = T extends z.ZodType<infer P> ? P : unknown;
 
-export type ActionHandler<TParamsSchema, TReturnSchema> = (
-  ctx: Context<InferZod<TParamsSchema>>
-) => Promise<InferZod<TReturnSchema>>;
-
-export interface ActionDefinition {
-  params: z.ZodTypeAny;
-  returns: z.ZodTypeAny;
-}
-
-export type ServiceImplementation<TContract extends { actions: Record<string, ActionDefinition> }> = {
-  [K in keyof TContract['actions']]: ActionHandler<
-    TContract['actions'][K]['params'],
-    TContract['actions'][K]['returns']
-  >;
+/**
+ * ServiceImplementation — Maps an action definition to a typed handler.
+ */
+export type ServiceImplementation<TContract extends { actions?: Record<string, IActionDefinition<any, any>> }> = {
+    [K in keyof TContract['actions']]: (
+        ctx: IContext<InferZod<NonNullable<TContract['actions']>[K]['params']>>
+    ) => Promise<InferZod<NonNullable<TContract['actions']>[K]['returns']>>
 };
+
+export type { IActionHandler };

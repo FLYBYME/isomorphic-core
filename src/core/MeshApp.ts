@@ -1,9 +1,5 @@
-import { IMeshApp, IMeshModule, AppConfig, ProviderToken } from '../interfaces/index';
+import { IMeshApp, IMeshModule, AppConfig, IProviderToken, IContext, ILogger, IServiceBroker, IServiceInstance, IServiceSchema } from '../interfaces';
 import { BootOrchestrator } from './BootOrchestrator';
-import { IServiceBroker } from '../interfaces/IServiceBroker';
-import { MeshActionRegistry, MeshEventRegistry } from '../contracts/MeshRegistry';
-import { ILogger } from '../types/core.types';
-import { IServiceInstance, ServiceSchema } from 'isomorphic-registry';
 
 /**
  * MeshApp — The "Motherboard" shell that provides DI and lifecycle management.
@@ -15,9 +11,9 @@ export class MeshApp implements IMeshApp {
     public readonly logger: ILogger;
 
     protected modules: IMeshModule[] = [];
-    protected pendingMiddleware: ((ctx: any, next: () => Promise<any>) => Promise<any>)[] = [];
+    protected pendingMiddleware: ((ctx: IContext<unknown, Record<string, unknown>>, next: () => Promise<unknown>) => Promise<unknown>)[] = [];
     protected providers = new Map<string, unknown>();
-    protected pendingServices: ServiceSchema[] = [];
+    protected pendingServices: IServiceSchema[] = [];
     private orchestrator: BootOrchestrator;
 
     constructor(config: AppConfig) {
@@ -26,20 +22,19 @@ export class MeshApp implements IMeshApp {
         this.config = config;
         this.orchestrator = new BootOrchestrator(this);
 
-        // Default logger if none provided in config
-        this.logger = config['logger'] || {
-            debug: (msg: string, data?: any) => console.debug(`[${this.nodeID}] ${msg}`, data || ''),
-            info: (msg: string, data?: any) => console.info(`[${this.nodeID}] ${msg}`, data || ''),
-            warn: (msg: string, data?: any) => console.warn(`[${this.nodeID}] ${msg}`, data || ''),
-            error: (msg: string, data?: any) => console.error(`[${this.nodeID}] ${msg}`, data || ''),
+        this.logger = (config['logger'] as ILogger) || {
+            debug: (msg: string, data?: unknown) => console.debug(`[${this.nodeID}] ${msg}`, data || ''),
+            info: (msg: string, data?: unknown) => console.info(`[${this.nodeID}] ${msg}`, data || ''),
+            warn: (msg: string, data?: unknown) => console.warn(`[${this.nodeID}] ${msg}`, data || ''),
+            error: (msg: string, data?: unknown) => console.error(`[${this.nodeID}] ${msg}`, data || ''),
             child: () => this.logger
         };
 
-        this.registerProvider('logger', this.logger);
-        this.registerProvider('app' as any, this);
+        this.registerProvider('logger' as IProviderToken<ILogger>, this.logger);
+        this.registerProvider('app' as IProviderToken<IMeshApp>, this);
     }
 
-    public use(moduleOrMiddleware: IMeshModule | ((ctx: any, next: () => Promise<any>) => Promise<any>)): this {
+    public use(moduleOrMiddleware: IMeshModule | ((ctx: unknown, next: () => Promise<unknown>) => Promise<unknown>)): this {
         if (typeof moduleOrMiddleware === 'function') {
             try {
                 const broker = this.getProvider<IServiceBroker>('broker');
@@ -53,10 +48,7 @@ export class MeshApp implements IMeshApp {
         return this;
     }
 
-    /**
-     * Registers a service instance.
-     */
-    public registerService(service: ServiceSchema): this {
+    public registerService(service: IServiceSchema): this {
         try {
             const broker = this.getProvider<IServiceBroker>('broker');
             broker.registerService(service);
@@ -66,8 +58,10 @@ export class MeshApp implements IMeshApp {
         return this;
     }
 
-    public registerProvider<T>(token: ProviderToken<T>, provider: T): void {
-        const key = typeof token === 'string' ? token : token.name;
+    public registerProvider<T>(token: IProviderToken<T>, provider: T): void {
+        const key = typeof token === 'string' || typeof token === 'symbol'
+            ? token.toString()
+            : (token as unknown as { name: string }).name;
         this.providers.set(key, provider);
 
         if (key === 'broker') {
@@ -77,44 +71,20 @@ export class MeshApp implements IMeshApp {
             }
             while (this.pendingServices.length > 0) {
                 const service = this.pendingServices.shift();
-                if (service === undefined) {
-                    throw new Error('Service is undefined');
-                }
-                broker.registerService(service);
+                if (service) broker.registerService(service);
             }
         }
     }
 
-    public getProvider<T>(token: ProviderToken<T>): T {
-        const key = typeof token === 'string' ? token : token.name;
+    public getProvider<T>(token: IProviderToken<T>): T {
+        const key = typeof token === 'string' || typeof token === 'symbol'
+            ? token.toString()
+            : (token as unknown as { name: string }).name;
         const provider = this.providers.get(key);
         if (provider === undefined) {
             throw new Error(`[MeshApp] Provider not found for token: ${key}`);
         }
         return provider as T;
-    }
-
-    /**
-     * Delegate RPC requests directly to the ServiceBroker.
-     */
-    public async call<
-        TAction extends keyof MeshActionRegistry,
-        TParams extends MeshActionRegistry[TAction] extends { params: infer P } ? P : any,
-        TReturn extends MeshActionRegistry[TAction] extends { returns: infer R } ? R : any
-    >(action: TAction, params: TParams): Promise<TReturn> {
-        const broker = this.getProvider<IServiceBroker>('broker');
-        return await broker.call(action, params);
-    }
-
-    /**
-     * Delegate event broadcasting to the ServiceBroker.
-     */
-    public emit<
-        TEvent extends keyof MeshEventRegistry,
-        TPayload extends MeshEventRegistry[TEvent]
-    >(event: TEvent, payload: TPayload): void {
-        const broker = this.getProvider<IServiceBroker>('broker');
-        broker.emit(event, payload);
     }
 
     public async start(): Promise<void> {
@@ -123,9 +93,32 @@ export class MeshApp implements IMeshApp {
         this.logger.info('MeshApp started successfully.');
     }
 
+    public async call(action: string, params: unknown): Promise<unknown> {
+        const broker = this.getProvider<IServiceBroker>('broker');
+        return broker.call(action, params);
+    }
+
+    public emit(event: string, payload: unknown): void {
+        const broker = this.getProvider<IServiceBroker>('broker');
+        broker.emit(event, payload);
+    }
+
     public async stop(): Promise<void> {
         this.logger.info('MeshApp stopping...');
         await this.orchestrator.executeTeardown(this.modules);
         this.logger.info('MeshApp stopped.');
     }
+}
+
+/**
+ * Factory for creating a MeshApp instance.
+ */
+export function createMeshApp(config: AppConfig & { modules?: IMeshModule[] }): MeshApp {
+    const app = new MeshApp(config);
+    if (config.modules) {
+        for (const mod of config.modules) {
+            app.use(mod);
+        }
+    }
+    return app;
 }

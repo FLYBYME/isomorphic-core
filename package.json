@@ -10,11 +10,7 @@
   },
   "dependencies": {
     "eventemitter3": "^5.0.4",
-    "isomorphic-auth": "file:../isomorphic-auth",
-    "isomorphic-mesh": "file:../isomorphic-mesh",
-    "isomorphic-registry": "file:../isomorphic-registry",
     "nanoid": "^3.3.11",
-    "raft-consensus": "file:../raft-consensus",
     "zod": "^3.25.76"
   },
   "devDependencies": {

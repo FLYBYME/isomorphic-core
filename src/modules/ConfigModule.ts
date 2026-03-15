@@ -1,36 +1,24 @@
 import { z } from 'zod';
-import { IMeshModule, IMeshApp } from '../interfaces';
+import { IMeshModule, IMeshApp, ILogger, IServiceBroker } from '../interfaces';
 
 /**
- * ConfigModule — Validates .env or config objects using Zod during onInit.
+ * ConfigModule — Provides runtime validated settings to the MeshApp.
  */
 export class ConfigModule<TSchema extends z.ZodObject<any>> implements IMeshModule {
     public readonly name = 'config';
-    private validatedConfig: z.infer<TSchema> | null = null;
+    public logger!: ILogger;
+    public serviceBroker!: IServiceBroker;
+    private config: z.infer<TSchema>;
 
-    constructor(
-        private schema: TSchema,
-        private source: Record<string, unknown> = (typeof process !== 'undefined' ? process.env : {}) as Record<string, unknown>
-    ) {}
-
-    onInit(app: IMeshApp): void {
-        try {
-            this.validatedConfig = this.schema.parse(this.source);
-            app.registerProvider('config', this.validatedConfig);
-            app.logger.info('[ConfigModule] Configuration validated successfully.');
-        } catch (err) {
-            app.logger.error('[ConfigModule] Configuration validation failed!', { 
-                errors: (err as z.ZodError).errors 
-            });
-            // Abort boot if config is invalid
-            throw err;
-        }
+    constructor(private schema: TSchema, private values: Record<string, unknown>) {
+        this.config = this.schema.parse(this.values);
     }
 
-    public get current(): z.infer<TSchema> {
-        if (!this.validatedConfig) {
-            throw new Error('[ConfigModule] Config not yet validated. Access it after onInit.');
-        }
-        return this.validatedConfig;
+    onInit(app: IMeshApp): void {
+        app.registerProvider('config', this.config);
+    }
+
+    public get<K extends keyof z.infer<TSchema>>(key: K): z.infer<TSchema>[K] {
+        return this.config[key];
     }
 }

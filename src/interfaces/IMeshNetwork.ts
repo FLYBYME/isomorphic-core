@@ -1,0 +1,33 @@
+import { ILogger } from './ILogger';
+
+export type PacketType = 'REQUEST' | 'RESPONSE' | 'RESPONSE_ERROR' | 'EVENT' | 'AUTH' | 'PING';
+
+export interface IMeshPacket<TPayload = unknown> {
+    id: string;
+    topic: string;
+    type: PacketType;
+    senderNodeID: string;
+    targetNodeID?: string;
+    timestamp: number;
+    data?: TPayload;
+    error?: { message: string, code?: string | number, data?: any };
+    meta?: Record<string, unknown>;
+}
+
+export type IMeshNetworkSubscriptionHandler<T = unknown> = (data: T, packet: IMeshPacket<T>) => void | Promise<void>;
+
+/**
+ * IMeshNetwork — High-level network transport interface.
+ */
+export interface IMeshNetwork {
+    readonly nodeID: string;
+    readonly logger: ILogger;
+    
+    send<T = unknown>(targetNodeID: string, topic: string, data: T, options?: Partial<IMeshPacket<T>>): Promise<void>;
+    publish<T = unknown>(topic: string, data: T): Promise<void>;
+    
+    onMessage<T = unknown>(topic: string, handler: IMeshNetworkSubscriptionHandler<T>): void;
+    
+    start(): Promise<void>;
+    stop(): Promise<void>;
+}

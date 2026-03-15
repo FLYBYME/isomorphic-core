@@ -1,35 +1,18 @@
 import { MeshApp } from './MeshApp';
-import { AppConfig } from '../interfaces/IMeshApp';
-import { LoggerModule, LogLevel } from '../modules/LoggerModule';
-import { BrokerModule } from '../modules/BrokerModule';
-import { NetworkModule } from '../modules/NetworkModule';
-import { RegistryModule } from '../modules/RegistryModule';
-import { AuthModule } from '../modules/AuthModule';
-
+import { IMeshApp, IMeshModule, AppConfig } from '../interfaces';
 
 export interface MeshAppOptions extends AppConfig {
-    logLevel?: LogLevel;
-    rootID?: string;
-    modules?: any[];
+    modules?: IMeshModule[];
 }
 
 /**
- * createMeshApp — The "Everything" Factory.
- * Pre-bundles the core modules so developers can start in 10 seconds.
+ * createMeshApp — Factory for generating a Mesh kernel.
+ * In a hardened Layer 0, modules are injected by the top-level composition.
  */
-export function createMeshApp(options: MeshAppOptions) {
+export function createMeshApp(options: MeshAppOptions): IMeshApp {
     const app = new MeshApp(options);
 
-    // Standard Core Bundle
-    app.use(new LoggerModule(options.logLevel || LogLevel.INFO));
-    app.use(new RegistryModule());
-    app.use(new BrokerModule());
-    app.use(new NetworkModule());
-    app.use(new AuthModule());
-    
-
-
-    // Add user modules
+    // Add injected modules
     if (options.modules) {
         options.modules.forEach(mod => app.use(mod));
     }

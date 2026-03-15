@@ -1,11 +1,19 @@
+import { ILogger } from './ILogger';
+import { IServiceBroker } from './IServiceBroker';
 import { IMeshApp } from './IMeshApp';
 
+// Inferred interface for life-cycle hooks of modules within MeshApp.
 export interface IMeshModule {
-    readonly name: string;
-    
-    onInit?(app: IMeshApp): void | Promise<void>;
-    onBind?(app: IMeshApp): void | Promise<void>;
-    onReady?(app: IMeshApp): void | Promise<void>;
-    onStop?(app: IMeshApp): void | Promise<void>;
-    health?(): Promise<boolean>;
+  readonly name: string;
+  logger?: ILogger;
+  serviceBroker?: IServiceBroker;
+
+  /** Initializes the module. Called before starting. */
+  onInit?(app: IMeshApp): Promise<void> | void;
+  /** Starts the module's services and operations. */
+  onStart?(app: IMeshApp): Promise<void> | void;
+  /** Stops the module's services and operations gracefully. */
+  onStop?(app: IMeshApp): Promise<void> | void;
+  /** Called after all modules have started, indicating readiness. */
+  onReady?(app: IMeshApp): Promise<void> | void;
 }

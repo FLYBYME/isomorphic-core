@@ -1,26 +1,73 @@
-import { IMeshTransceiver, MeshActionRegistry, MeshEventRegistry } from '../contracts/MeshRegistry';
-import { Context, ServiceSchema } from 'isomorphic-registry';
+import { IMeshNetwork, IMeshPacket } from './IMeshNetwork';
+import { ILogger } from './ILogger';
+import { IServiceRegistry } from './IServiceRegistry';
+import { IServiceSchema } from './IService';
+import { IContext } from './IContext';
+import { IServiceActionRegistry, IServiceEventRegistry } from './IGlobalRegistry';
+import { IBrokerPlugin } from './IBrokerPlugin';
+import { IMeshApp } from './IMeshApp';
+import { IMiddleware } from './IInterceptor';
 
-export interface IServiceBroker extends IMeshTransceiver {
-    call<
-        TAction extends keyof MeshActionRegistry,
-        TParams extends MeshActionRegistry[TAction] extends { params: infer P } ? P : any,
-        TReturn extends MeshActionRegistry[TAction] extends { returns: infer R } ? R : any
-    >(action: TAction, params: TParams): Promise<TReturn>;
+/**
+ * IServiceBroker — Interface for the central communication kernel.
+ * Refactored for Bipartite Pipeline and High-Speed execution.
+ */
+export interface IServiceBroker {
+    readonly app: IMeshApp;
+    readonly logger: ILogger;
+    readonly registry: IServiceRegistry;
+    readonly network: IMeshNetwork;
 
-    emit<
-        TEvent extends keyof MeshEventRegistry,
-        TPayload extends MeshEventRegistry[TEvent]
-    >(event: TEvent, payload: TPayload): void;
+    /** Registers a plugin into the broker's lifecycle. */
+    pipe(plugin: IBrokerPlugin): this;
 
-    registerService(service: ServiceSchema): void;
+    /** Registers a middleware in the GLOBAL pipeline (Always runs). */
+    use(mw: IMiddleware): void;
 
-    /**
-     * Retrieves the active execution context for the current operation.
-     */
-    getContext(): Context<any> | undefined;
+    /** Registers a middleware in the LOCAL pipeline (Runs only for local services). */
+    useLocal(mw: IMiddleware): void;
 
-    on(event: string, handler: (payload: any) => void): (() => void);
-    off(event: string, handler: (payload: any) => void): void;
-    use(middleware: (ctx: Context<any>, next: () => Promise<any>) => Promise<any>): void;
+    /** Registers a service schema. */
+    registerService(service: IServiceSchema): void;
+
+    /** Fully processes a context through the pipeline. */
+    handlePipeline(ctx: IContext<unknown, Record<string, unknown>>): Promise<unknown>;
+
+    /** Low-level execution (used by NetworkPlugin for inbound requests) */
+    handleIncomingRPC(packet: IMeshPacket): Promise<unknown>;
+
+    /** Low-level dispatch to remote node. */
+    executeRemote(nodeID: string, actionName: string, params: unknown, meta?: Record<string, unknown>): Promise<unknown>;
+
+    /** Typed mesh action call. */
+    call<K extends keyof IServiceActionRegistry>(
+        action: K, 
+        params: any
+    ): Promise<any>;
+
+    /** Fallback untyped call. */
+    call<TResult = unknown>(action: string, params: unknown): Promise<TResult>;
+
+    /** Typed mesh event emit. */
+    emit<K extends keyof IServiceEventRegistry>(event: K, payload: any): void;
+
+    /** Untyped event emit. */
+    emit(event: string, payload: unknown): void;
+
+    /** Subscription to events. */
+    on(topic: string, handler: (payload: unknown) => void): (() => void);
+    off(topic: string, handler: (payload: unknown) => void): void;
+
+    /** Gets the current execution context. */
+    getContext(): IContext<unknown, Record<string, unknown>> | undefined;
+
+    /** Starts the broker and its plugins. */
+    start(): Promise<void>;
+
+    /** Stops the broker. */
+    stop(): Promise<void>;
+
+    /** Manual wiring (called by plugins) */
+    setNetwork(network: IMeshNetwork): void;
+    setRegistry(registry: IServiceRegistry): void;
 }
