@@ -6,6 +6,7 @@ export interface IActionDefinition<TParams = any, TReturns = any> {
     params: any;
     returns: any;
     handler: IActionHandler;
+    mutates?: boolean;
 }
 
 export type IActionHandler = (ctx: IContext<any, any>) => Promise<any>;

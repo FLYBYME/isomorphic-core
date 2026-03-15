@@ -33,7 +33,7 @@ interface LocalAction {
 /**
  * Runtime Action Registry for Zod validation.
  */
-export const MeshActionSchemaRegistry: Map<string, { params: z.ZodTypeAny, returns: z.ZodTypeAny }> = new Map();
+export const MeshActionSchemaRegistry: Map<string, { params: z.ZodTypeAny, returns: z.ZodTypeAny, mutates?: boolean }> = new Map();
 
 /**
  * ServiceBroker — The "OS Kernel" that routes requests locally or remotely.
@@ -133,17 +133,25 @@ export class ServiceBroker implements IServiceBroker {
         const serviceWithInit = service as unknown as HasOptionalOnInit;
         if (typeof serviceWithInit.onInit === 'function') serviceWithInit.onInit(this.app);
 
-        const schemaActions = (service.actions || {}) as Record<string, { highSecurity?: boolean }>;
+        const schemaActions = (service.actions || {}) as Record<string, IActionDefinition<unknown, unknown>>;
         const serviceDict = service as unknown as Record<string, unknown>;
 
         for (const actionNameKey of Object.keys(schemaActions)) {
             const handler = serviceDict[actionNameKey];
+            const actionDef = schemaActions[actionNameKey];
             if (typeof handler === 'function') {
                 const actionName = `${serviceName}.${actionNameKey}`;
-                const metadata = schemaActions[actionNameKey] || {};
+                
+                // Populate schema registry for runtime validation and mutation tracking
+                MeshActionSchemaRegistry.set(actionName, {
+                    params: actionDef.params,
+                    returns: actionDef.returns,
+                    mutates: actionDef.mutates
+                });
+
                 this.localServices.set(actionName, {
                     handler: handler.bind(service) as (ctx: IContext<unknown, Record<string, unknown>>) => Promise<unknown>,
-                    highSecurity: metadata.highSecurity === true
+                    highSecurity: (actionDef as any).highSecurity === true
                 });
             } else {
                 this.logger.warn(`[ServiceBroker] Action '${actionNameKey}' defined in schema for service '${serviceName}' but no handler found.`);
